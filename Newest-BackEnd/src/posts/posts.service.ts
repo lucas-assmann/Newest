@@ -1,0 +1,298 @@
+import {
+  BadRequestException,
+  Injectable,
+  UnauthorizedException,
+} from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { Like } from '@prisma/client';
+import { PrismaService } from 'src/prisma.service';
+import { CreatePostDto } from './dto/create-post.dto';
+
+@Injectable()
+export class PostsService {
+  constructor(
+    private prisma: PrismaService,
+    private configService: ConfigService,
+  ) {}
+
+  private async checkImage(imageUrl: string): Promise<boolean> {
+    const user = this.configService.get<string>('SIGHTENGINE_USER');
+    const secret = this.configService.get<string>('SIGHTENGINE_SECRET');
+    const response = await fetch(
+      `https://api.sightengine.com/1.0/check.json?url=${encodeURIComponent(imageUrl)}&models=nudity,violence&api_user=${user}&api_secret=${secret}`,
+    );
+
+    const data = await response.json();
+    console.log('Sightengine response:', JSON.stringify(data));
+
+    if (
+      data.nudity?.raw > 0.5 ||
+      data.nudity?.partial > 0.7 ||
+      data.violence?.prob > 0.7
+    ) {
+      return false;
+    }
+
+    return true;
+  }
+
+  async toggleLike(postId: string, userId: string) {
+    const existingLike: Like | null = await this.prisma.like.findUnique({
+      where: {
+        userId_postId: {
+          userId,
+          postId,
+        },
+      },
+    });
+
+    if (existingLike) {
+      await this.prisma.like.delete({
+        where: {
+          id: existingLike.id,
+        },
+      });
+
+      await this.prisma.notification.deleteMany({
+        where: {
+          actorId: userId,
+          postId,
+          type: 'like',
+        },
+      });
+
+      const updatedPost = await this.prisma.post.update({
+        where: { id: postId },
+        data: { likesCount: { decrement: 1 } },
+        select: {
+          id: true,
+          likesCount: true,
+        },
+      });
+
+      return {
+        liked: false,
+        message: 'Like removido',
+        postId: updatedPost.id,
+        likesCount: updatedPost.likesCount,
+        isLiked: false,
+      };
+    } else {
+      await this.prisma.like.create({
+        data: {
+          userId,
+          postId,
+        },
+      });
+
+      const updatedPost = await this.prisma.post.update({
+        where: { id: postId },
+        data: { likesCount: { increment: 1 } },
+        select: {
+          id: true,
+          likesCount: true,
+          authorId: true,
+        },
+      });
+
+      if (updatedPost.authorId !== userId) {
+        await this.prisma.notification.create({
+          data: {
+            userId: updatedPost.authorId,
+            actorId: userId,
+            type: 'like',
+            postId,
+          },
+        });
+      }
+
+      return {
+        liked: true,
+        message: 'Like adicionado',
+        postId: updatedPost.id,
+        likesCount: updatedPost.likesCount,
+        isLiked: true,
+      };
+    }
+  }
+
+  async getAllPosts(currentUserId?: string) {
+    const posts = await this.prisma.post.findMany({
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        title: true,
+        content: true,
+        images: true,
+        likesCount: true,
+        createdAt: true,
+        author: {
+          select: { id: true, name: true, avatar: true },
+        },
+        likes: currentUserId
+          ? {
+              where: { userId: currentUserId },
+              select: { id: true, userId: true, postId: true },
+            }
+          : false,
+        _count: { select: { comments: true } },
+      },
+    });
+
+    return posts.map((post: any) => ({
+      id: post.id,
+      title: post.title,
+      content: post.content,
+      images: post.images,
+      likes: post.likesCount,
+      comments: post._count.comments,
+      createdAt: post.createdAt,
+      author: post.author,
+      isLiked: post.likes ? post.likes.length > 0 : false,
+    }));
+  }
+
+  async findByUserId(userId: string, currentUserId?: string) {
+    const posts = await this.prisma.post.findMany({
+      where: { authorId: userId },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        title: true,
+        content: true,
+        likesCount: true,
+        images: true,
+        createdAt: true,
+        author: {
+          select: { id: true, name: true, avatar: true },
+        },
+        likes: currentUserId
+          ? { where: { userId: currentUserId }, select: { id: true } }
+          : false,
+        _count: { select: { comments: true } },
+      },
+    });
+
+    return posts.map((post: any) => ({
+      id: post.id,
+      title: post.title,
+      content: post.content,
+      images: post.images,
+      likes: post.likesCount,
+      comments: post._count.comments,
+      createdAt: post.createdAt,
+      author: post.author,
+      isLiked: post.likes ? post.likes.length > 0 : false,
+    }));
+  }
+
+  async findOne(postId: string, currentUserId?: string) {
+    const post = await this.prisma.post.findUnique({
+      where: { id: postId },
+      select: {
+        id: true,
+        title: true,
+        content: true,
+        likesCount: true,
+        images: true,
+        createdAt: true,
+        author: {
+          select: { id: true, name: true, avatar: true },
+        },
+        likes: currentUserId
+          ? { where: { userId: currentUserId }, select: { id: true } }
+          : false,
+        _count: { select: { comments: true } },
+      },
+    });
+
+    if (!post) throw new Error('Post não encontrado');
+
+    return {
+      ...post,
+      likes: post.likesCount,
+      comments: post._count.comments,
+      isLiked: Array.isArray(post.likes) && post.likes.length > 0,
+    };
+  }
+
+  async create(createPostDto: CreatePostDto, userId: string) {
+    if (createPostDto.images && createPostDto.images.length > 0) {
+      const results = await Promise.all(
+        createPostDto.images.map((url) => this.checkImage(url)),
+      );
+
+      if (results.some((r) => r === false)) {
+        throw new BadRequestException(
+          'Uma ou mais imagens contêm conteúdo não permitido',
+        );
+      }
+    }
+
+    const post = await this.prisma.post.create({
+      data: {
+        ...createPostDto,
+        authorId: userId,
+      },
+      select: {
+        id: true,
+        title: true,
+        content: true,
+        likesCount: true,
+        images: true,
+        createdAt: true,
+        author: {
+          select: { id: true, name: true, avatar: true },
+        },
+        _count: { select: { comments: true } },
+      },
+    });
+
+    const mentions = createPostDto.content.match(/@(\w+)/g);
+    if (mentions) {
+      const usernames = mentions.map((m) => m.slice(1));
+      const mentionedUsers = await this.prisma.user.findMany({
+        where: { name: { in: usernames }, NOT: { id: userId } },
+        select: { id: true },
+      });
+
+      await Promise.all(
+        mentionedUsers.map((user) =>
+          this.prisma.notification.create({
+            data: {
+              userId: user.id,
+              actorId: userId,
+              type: 'mention',
+              postId: post.id,
+            },
+          }),
+        ),
+      );
+    }
+
+    return {
+      ...post,
+      likes: post.likesCount,
+      comments: post._count.comments,
+    };
+  }
+
+  async remove(id: string, userId: string) {
+    const post = await this.prisma.post.findUnique({
+      where: { id },
+      select: { authorId: true },
+    });
+
+    if (!post) {
+      throw new Error('Post não encontrado');
+    }
+
+    if (post.authorId !== userId) {
+      throw new UnauthorizedException(
+        'Você não tem permissão para deletar este post',
+      );
+    }
+
+    return await this.prisma.post.delete({ where: { id } });
+  }
+}
