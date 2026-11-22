@@ -5,6 +5,7 @@ import {
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { NotificationService } from 'src/notification/notification.service';
 import { createPrismaMock, PrismaMock } from 'src/test-utils/prisma-mock';
 import { CreatePostSchema } from './dto/create-post.dto';
 import { PostsService } from './posts.service';
@@ -27,7 +28,7 @@ describe('PostsService', () => {
 
   function makeService(env: Record<string, string> = {}) {
     const config = { get: (key: string) => env[key] } as ConfigService;
-    return new PostsService(prisma, config);
+    return new PostsService(prisma, config, new NotificationService(prisma));
   }
 
   const creds = { SIGHTENGINE_USER: 'u', SIGHTENGINE_SECRET: 's3cr3t' };
@@ -37,6 +38,8 @@ describe('PostsService', () => {
     prisma.post.create.mockResolvedValue({
       id: 'p1',
       likesCount: 0,
+      likes: [],
+      author: { id: 'u1', name: 'ana', avatar: null },
       _count: { comments: 0 },
     } as any);
     fetchMock = jest.spyOn(global, 'fetch');

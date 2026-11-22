@@ -1,9 +1,36 @@
 import { Injectable } from '@nestjs/common';
-import { PrismaService } from 'src/prisma.service';
+import { PrismaService } from 'src/prisma/prisma.service';
+
+/** Nomes citados com @ no texto, sem repetir. */
+export function extractMentions(content: string): string[] {
+  const names = [...content.matchAll(/@(\w+)/g)].map((m) => m[1]);
+  return [...new Set(names)];
+}
 
 @Injectable()
 export class NotificationService {
   constructor(private prisma: PrismaService) {}
+
+  /** Avisa quem foi mencionado num post ou comentário (antes duplicado nos dois). */
+  async notifyMentions(content: string, actorId: string, postId: string) {
+    const names = extractMentions(content);
+    if (names.length === 0) return;
+
+    const mentioned = await this.prisma.user.findMany({
+      where: { name: { in: names }, NOT: { id: actorId } },
+      select: { id: true },
+    });
+    if (mentioned.length === 0) return;
+
+    await this.prisma.notification.createMany({
+      data: mentioned.map((user) => ({
+        userId: user.id,
+        actorId,
+        type: 'mention',
+        postId,
+      })),
+    });
+  }
 
   async findByUserId(userId: string) {
     return this.prisma.notification.findMany({
@@ -39,7 +66,7 @@ export class NotificationService {
 
   async getUnreadCount(userId: string) {
     return this.prisma.notification.count({
-      where: { userId, read: false },
+      where: { userId, read: false, NOT: { actorId: userId } },
     });
   }
 }

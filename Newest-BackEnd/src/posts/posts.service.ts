@@ -7,18 +7,29 @@ import {
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Like } from '@prisma/client';
-import { PrismaService } from 'src/prisma.service';
+import { Prisma } from '@prisma/client';
+import { NotificationService } from 'src/notification/notification.service';
+import { PrismaService } from 'src/prisma/prisma.service';
 import { CreatePostDto } from './dto/create-post.dto';
+import { postSelect, toPostDto } from './post.mapper';
+
+/** Parte da resposta do Sightengine que usamos. */
+interface SightengineResponse {
+  status?: string;
+  error?: { message?: string };
+  nudity?: { raw?: number; partial?: number };
+  violence?: { prob?: number };
+}
 
 @Injectable()
 export class PostsService {
+  private readonly logger = new Logger(PostsService.name);
+
   constructor(
     private prisma: PrismaService,
     private configService: ConfigService,
+    private notifications: NotificationService,
   ) {}
-
-  private readonly logger = new Logger(PostsService.name);
 
   /**
    * Verifica a imagem no Sightengine. Se a verificação não puder ser feita
@@ -37,20 +48,23 @@ export class PostsService {
       throw unavailable;
     }
 
-    let data: any;
+    let data: SightengineResponse;
     try {
       // POST com o segredo no corpo, para ele não aparecer em logs de URL.
-      const response = await fetch('https://api.sightengine.com/1.0/check.json', {
-        method: 'POST',
-        body: new URLSearchParams({
-          url: imageUrl,
-          models: 'nudity,violence',
-          api_user: apiUser,
-          api_secret: apiSecret,
-        }),
-      });
+      const response = await fetch(
+        'https://api.sightengine.com/1.0/check.json',
+        {
+          method: 'POST',
+          body: new URLSearchParams({
+            url: imageUrl,
+            models: 'nudity,violence',
+            api_user: apiUser,
+            api_secret: apiSecret,
+          }),
+        },
+      );
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      data = await response.json();
+      data = (await response.json()) as SightengineResponse;
     } catch (error) {
       this.logger.error(`Falha ao chamar o Sightengine: ${String(error)}`);
       throw unavailable;
@@ -62,190 +76,121 @@ export class PostsService {
     }
 
     return !(
-      data.nudity?.raw > 0.5 ||
-      data.nudity?.partial > 0.7 ||
-      data.violence?.prob > 0.7
+      (data.nudity?.raw ?? 0) > 0.5 ||
+      (data.nudity?.partial ?? 0) > 0.7 ||
+      (data.violence?.prob ?? 0) > 0.7
     );
   }
 
+  /** Estado do like depois da operação (também usado após um clique duplo). */
+  private async likeState(postId: string, userId: string) {
+    const [like, post] = await Promise.all([
+      this.prisma.like.findUnique({
+        where: { userId_postId: { userId, postId } },
+        select: { id: true },
+      }),
+      this.prisma.post.findUniqueOrThrow({
+        where: { id: postId },
+        select: { id: true, likesCount: true },
+      }),
+    ]);
+    return this.likeResponse(post.id, post.likesCount, !!like);
+  }
+
+  private likeResponse(postId: string, likesCount: number, isLiked: boolean) {
+    return {
+      liked: isLiked,
+      isLiked,
+      message: isLiked ? 'Like adicionado' : 'Like removido',
+      postId,
+      likesCount,
+    };
+  }
+
   async toggleLike(postId: string, userId: string) {
-    const existingLike: Like | null = await this.prisma.like.findUnique({
-      where: {
-        userId_postId: {
-          userId,
-          postId,
-        },
-      },
+    const post = await this.prisma.post.findUnique({
+      where: { id: postId },
+      select: { id: true, authorId: true },
     });
+    if (!post) {
+      throw new NotFoundException('Post não encontrado');
+    }
 
-    if (existingLike) {
-      await this.prisma.like.delete({
-        where: {
-          id: existingLike.id,
-        },
-      });
-
-      await this.prisma.notification.deleteMany({
-        where: {
-          actorId: userId,
-          postId,
-          type: 'like',
-        },
-      });
-
-      const updatedPost = await this.prisma.post.update({
-        where: { id: postId },
-        data: { likesCount: { decrement: 1 } },
-        select: {
-          id: true,
-          likesCount: true,
-        },
-      });
-
-      return {
-        liked: false,
-        message: 'Like removido',
-        postId: updatedPost.id,
-        likesCount: updatedPost.likesCount,
-        isLiked: false,
-      };
-    } else {
-      await this.prisma.like.create({
-        data: {
-          userId,
-          postId,
-        },
-      });
-
-      const updatedPost = await this.prisma.post.update({
-        where: { id: postId },
-        data: { likesCount: { increment: 1 } },
-        select: {
-          id: true,
-          likesCount: true,
-          authorId: true,
-        },
-      });
-
-      if (updatedPost.authorId !== userId) {
-        await this.prisma.notification.create({
-          data: {
-            userId: updatedPost.authorId,
-            actorId: userId,
-            type: 'like',
-            postId,
-          },
+    try {
+      // Tudo ou nada: like, contador e notificação nunca ficam fora de sincronia.
+      return await this.prisma.$transaction(async (tx) => {
+        const existingLike = await tx.like.findUnique({
+          where: { userId_postId: { userId, postId } },
+          select: { id: true },
         });
-      }
 
-      return {
-        liked: true,
-        message: 'Like adicionado',
-        postId: updatedPost.id,
-        likesCount: updatedPost.likesCount,
-        isLiked: true,
-      };
+        if (existingLike) {
+          await tx.like.delete({ where: { id: existingLike.id } });
+          await tx.notification.deleteMany({
+            where: { actorId: userId, postId, type: 'like' },
+          });
+          const updated = await tx.post.update({
+            where: { id: postId },
+            data: { likesCount: { decrement: 1 } },
+            select: { id: true, likesCount: true },
+          });
+          return this.likeResponse(updated.id, updated.likesCount, false);
+        }
+
+        await tx.like.create({ data: { userId, postId } });
+        const updated = await tx.post.update({
+          where: { id: postId },
+          data: { likesCount: { increment: 1 } },
+          select: { id: true, likesCount: true },
+        });
+        if (post.authorId !== userId) {
+          await tx.notification.create({
+            data: {
+              userId: post.authorId,
+              actorId: userId,
+              type: 'like',
+              postId,
+            },
+          });
+        }
+        return this.likeResponse(updated.id, updated.likesCount, true);
+      });
+    } catch (error) {
+      // Clique duplo: outra requisição já criou (P2002) ou apagou (P2025) o like.
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        ['P2002', 'P2025'].includes(error.code)
+      ) {
+        return this.likeState(postId, userId);
+      }
+      throw error;
     }
   }
 
-  async getAllPosts(currentUserId?: string) {
+  async getAllPosts(currentUserId: string) {
     const posts = await this.prisma.post.findMany({
       orderBy: { createdAt: 'desc' },
-      select: {
-        id: true,
-        title: true,
-        content: true,
-        images: true,
-        likesCount: true,
-        createdAt: true,
-        author: {
-          select: { id: true, name: true, avatar: true },
-        },
-        likes: currentUserId
-          ? {
-              where: { userId: currentUserId },
-              select: { id: true, userId: true, postId: true },
-            }
-          : false,
-        _count: { select: { comments: true } },
-      },
+      select: postSelect(currentUserId),
     });
-
-    return posts.map((post: any) => ({
-      id: post.id,
-      title: post.title,
-      content: post.content,
-      images: post.images,
-      likes: post.likesCount,
-      comments: post._count.comments,
-      createdAt: post.createdAt,
-      author: post.author,
-      isLiked: post.likes ? post.likes.length > 0 : false,
-    }));
+    return posts.map(toPostDto);
   }
 
-  async findByUserId(userId: string, currentUserId?: string) {
+  async findByUserId(userId: string, currentUserId: string) {
     const posts = await this.prisma.post.findMany({
       where: { authorId: userId },
       orderBy: { createdAt: 'desc' },
-      select: {
-        id: true,
-        title: true,
-        content: true,
-        likesCount: true,
-        images: true,
-        createdAt: true,
-        author: {
-          select: { id: true, name: true, avatar: true },
-        },
-        likes: currentUserId
-          ? { where: { userId: currentUserId }, select: { id: true } }
-          : false,
-        _count: { select: { comments: true } },
-      },
+      select: postSelect(currentUserId),
     });
-
-    return posts.map((post: any) => ({
-      id: post.id,
-      title: post.title,
-      content: post.content,
-      images: post.images,
-      likes: post.likesCount,
-      comments: post._count.comments,
-      createdAt: post.createdAt,
-      author: post.author,
-      isLiked: post.likes ? post.likes.length > 0 : false,
-    }));
+    return posts.map(toPostDto);
   }
 
-  async findOne(postId: string, currentUserId?: string) {
+  async findOne(postId: string, currentUserId: string) {
     const post = await this.prisma.post.findUnique({
       where: { id: postId },
-      select: {
-        id: true,
-        title: true,
-        content: true,
-        likesCount: true,
-        images: true,
-        createdAt: true,
-        author: {
-          select: { id: true, name: true, avatar: true },
-        },
-        likes: currentUserId
-          ? { where: { userId: currentUserId }, select: { id: true } }
-          : false,
-        _count: { select: { comments: true } },
-      },
+      select: postSelect(currentUserId),
     });
-
     if (!post) throw new NotFoundException('Post não encontrado');
-
-    return {
-      ...post,
-      likes: post.likesCount,
-      comments: post._count.comments,
-      isLiked: Array.isArray(post.likes) && post.likes.length > 0,
-    };
+    return toPostDto(post);
   }
 
   async create(createPostDto: CreatePostDto, userId: string) {
@@ -254,7 +199,7 @@ export class PostsService {
         createPostDto.images.map((url) => this.isImageSafe(url)),
       );
 
-      if (results.some((r) => r === false)) {
+      if (results.some((safe) => !safe)) {
         throw new BadRequestException(
           'Uma ou mais imagens contêm conteúdo não permitido',
         );
@@ -262,51 +207,17 @@ export class PostsService {
     }
 
     const post = await this.prisma.post.create({
-      data: {
-        ...createPostDto,
-        authorId: userId,
-      },
-      select: {
-        id: true,
-        title: true,
-        content: true,
-        likesCount: true,
-        images: true,
-        createdAt: true,
-        author: {
-          select: { id: true, name: true, avatar: true },
-        },
-        _count: { select: { comments: true } },
-      },
+      data: { ...createPostDto, authorId: userId },
+      select: postSelect(userId),
     });
 
-    const mentions = createPostDto.content.match(/@(\w+)/g);
-    if (mentions) {
-      const usernames = mentions.map((m) => m.slice(1));
-      const mentionedUsers = await this.prisma.user.findMany({
-        where: { name: { in: usernames }, NOT: { id: userId } },
-        select: { id: true },
-      });
+    await this.notifications.notifyMentions(
+      createPostDto.content,
+      userId,
+      post.id,
+    );
 
-      await Promise.all(
-        mentionedUsers.map((user) =>
-          this.prisma.notification.create({
-            data: {
-              userId: user.id,
-              actorId: userId,
-              type: 'mention',
-              postId: post.id,
-            },
-          }),
-        ),
-      );
-    }
-
-    return {
-      ...post,
-      likes: post.likesCount,
-      comments: post._count.comments,
-    };
+    return toPostDto(post);
   }
 
   async remove(id: string, userId: string) {
@@ -325,6 +236,6 @@ export class PostsService {
       );
     }
 
-    return await this.prisma.post.delete({ where: { id } });
+    return this.prisma.post.delete({ where: { id } });
   }
 }

@@ -3,106 +3,68 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { PrismaService } from 'src/prisma.service';
+import { NotificationService } from 'src/notification/notification.service';
+import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateCommentDto } from './dto/create-comment.dto';
+
+const authorSelect = {
+  author: { select: { id: true, name: true, avatar: true } },
+} as const;
 
 @Injectable()
 export class CommentService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private notifications: NotificationService,
+  ) {}
 
-  async create(createCommentDto: CreateCommentDto, userId: string) {
-    const comment = await this.prisma.comment.create({
-      data: {
-        content: createCommentDto.content,
-        postId: createCommentDto.postId,
-        authorId: userId,
-      },
-      include: {
-        author: {
-          select: {
-            id: true,
-            name: true,
-            avatar: true,
-          },
-        },
-      },
-    });
-
+  async create({ content, postId }: CreateCommentDto, userId: string) {
     const post = await this.prisma.post.findUnique({
-      where: { id: createCommentDto.postId },
+      where: { id: postId },
       select: { authorId: true },
     });
+    if (!post) {
+      throw new NotFoundException('Post não encontrado');
+    }
 
-    if (post && post.authorId !== userId) {
+    const comment = await this.prisma.comment.create({
+      data: { content, postId, authorId: userId },
+      include: authorSelect,
+    });
+
+    if (post.authorId !== userId) {
       await this.prisma.notification.create({
         data: {
           userId: post.authorId,
           actorId: userId,
           type: 'comment',
-          postId: createCommentDto.postId,
+          postId,
         },
       });
     }
 
-    const mentions = createCommentDto.content.match(/@(\w+)/g);
-    if (mentions) {
-      const usernames = mentions.map((m) => m.slice(1));
-      const mentionedUsers = await this.prisma.user.findMany({
-        where: {
-          name: { in: usernames },
-          NOT: { id: userId },
-        },
-        select: { id: true },
-      });
-
-      await Promise.all(
-        mentionedUsers.map((user) =>
-          this.prisma.notification.create({
-            data: {
-              userId: user.id,
-              actorId: userId,
-              type: 'mention',
-              postId: createCommentDto.postId,
-            },
-          }),
-        ),
-      );
-    }
+    await this.notifications.notifyMentions(content, userId, postId);
 
     return comment;
   }
 
-  async findByPostId(postId: string) {
-    const comments = await this.prisma.comment.findMany({
+  findByPostId(postId: string) {
+    return this.prisma.comment.findMany({
       where: { postId },
       orderBy: { createdAt: 'desc' },
-      include: {
-        author: {
-          select: {
-            id: true,
-            name: true,
-            avatar: true,
-          },
-        },
-      },
+      include: authorSelect,
     });
-
-    return comments;
   }
 
   async findOne(id: string) {
-    return this.prisma.comment.findUnique({
+    const comment = await this.prisma.comment.findUnique({
       where: { id },
-      include: {
-        author: {
-          select: {
-            id: true,
-            name: true,
-            avatar: true,
-          },
-        },
-      },
+      include: authorSelect,
     });
+    if (!comment) {
+      throw new NotFoundException('Comentário não encontrado');
+    }
+    return comment;
   }
 
   async remove(id: string, userId: string) {
@@ -121,6 +83,6 @@ export class CommentService {
       );
     }
 
-    return await this.prisma.comment.delete({ where: { id } });
+    return this.prisma.comment.delete({ where: { id } });
   }
 }
