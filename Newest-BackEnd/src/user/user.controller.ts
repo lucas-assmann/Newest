@@ -1,5 +1,4 @@
 import {
-  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -8,141 +7,58 @@ import {
   Patch,
   Post,
   Query,
-  Req,
-  UploadedFile,
-  UseGuards,
-  UseInterceptors,
 } from '@nestjs/common';
-import { FileInterceptor } from '@nestjs/platform-express';
-import { diskStorage } from 'multer';
-import { extname } from 'path';
-import { JwtAuthGuard } from 'src/auth/jwt/jwt-auth.guard';
+import type { AuthUser } from 'src/auth/current-user.decorator';
+import { CurrentUser } from 'src/auth/current-user.decorator';
+import { Public } from 'src/auth/public.decorator';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { UserService } from './user.service';
 
+// As imagens (avatar) são enviadas pelo front direto ao Cloudinary;
+// aqui só chega a URL, validada no DTO.
 @Controller('user')
 export class UserController {
   constructor(private readonly userService: UserService) {}
 
+  @Public()
   @Post()
-  @UseInterceptors(
-    FileInterceptor('avatar', {
-      storage: diskStorage({
-        destination: './uploads/avatars',
-        filename: (req, file, callback) => {
-          const uniqueSuffix =
-            Date.now() + '-' + Math.round(Math.random() * 1e9);
-          const ext = extname(file.originalname);
-          callback(null, `avatar-${uniqueSuffix}${ext}`);
-        },
-      }),
-      fileFilter: (req, file, callback) => {
-        if (!file.mimetype.match(/\/(jpg|jpeg|png|gif|webp)$/)) {
-          return callback(new Error('Apenas imagens são permitidas!'), false);
-        }
-        callback(null, true);
-      },
-      limits: {
-        fileSize: 5 * 1024 * 1024,
-      },
-    }),
-  )
-  create(
-    @Body() createUserDto: CreateUserDto,
-    @UploadedFile() file?: Express.Multer.File,
-  ) {
-    if (file) {
-      createUserDto.avatar = `/uploads/avatars/${file.filename}`;
-    }
+  create(@Body() createUserDto: CreateUserDto) {
     return this.userService.create(createUserDto);
   }
 
-  @UseGuards(JwtAuthGuard)
   @Get('me')
-  async getMe(@Req() req) {
-    const userId = req.user.id;
-    return this.userService.findById(userId);
+  getMe(@CurrentUser() user: AuthUser) {
+    return this.userService.findById(user.id);
   }
 
-  @UseGuards(JwtAuthGuard)
   @Patch('me')
-  update(@Req() req, @Body() updateUserDto: UpdateUserDto) {
-    const userId = req.user.id;
-    return this.userService.update(userId, updateUserDto);
+  update(@CurrentUser() user: AuthUser, @Body() updateUserDto: UpdateUserDto) {
+    return this.userService.update(user.id, updateUserDto);
   }
 
-  @UseGuards(JwtAuthGuard)
   @Patch('me/password')
-  changePassword(@Req() req, @Body() dto: ChangePasswordDto) {
-    return this.userService.changePassword(req.user.id, dto);
+  changePassword(
+    @CurrentUser() user: AuthUser,
+    @Body() dto: ChangePasswordDto,
+  ) {
+    return this.userService.changePassword(user.id, dto);
   }
 
-  @UseGuards(JwtAuthGuard)
-  @Post('avatar')
-  @UseInterceptors(
-    FileInterceptor('avatar', {
-      storage: diskStorage({
-        destination: './uploads/avatars',
-        filename: (req, file, callback) => {
-          const uniqueSuffix =
-            Date.now() + '-' + Math.round(Math.random() * 1e9);
-          const ext = extname(file.originalname);
-          callback(null, `avatar-${uniqueSuffix}${ext}`);
-        },
-      }),
-      fileFilter: (req, file, callback) => {
-        if (!file.mimetype.match(/\/(jpg|jpeg|png|gif|webp)$/)) {
-          return callback(new Error('Apenas imagens são permitidas!'), false);
-        }
-        callback(null, true);
-      },
-      limits: {
-        fileSize: 5 * 1024 * 1024,
-      },
-    }),
-  )
-  async uploadAvatar(@Req() req, @UploadedFile() file: Express.Multer.File) {
-    const userId = req.user.id;
-
-    if (!file) {
-      throw new BadRequestException('Nenhum arquivo foi enviado');
-    }
-
-    const avatarUrl = `/uploads/avatars/${file.filename}`;
-
-    await this.userService.updateAvatar(userId, avatarUrl);
-
-    return { avatarUrl };
-  }
-
-  @UseGuards(JwtAuthGuard)
-  @Get('search')
-  async searchUsers(@Query('q') query: string) {
-    if (!query || query.trim() === '') {
-      return [];
-    }
-    return await this.userService.searchUsers(query);
-  }
-
-  @UseGuards(JwtAuthGuard)
-  @Get(':id')
-  async getUserById(@Param('id') id: string) {
-    return this.userService.findOne(id);
-  }
-
-  @UseGuards(JwtAuthGuard)
-  @Get(':id/posts')
-  async getUserPosts(@Param('id') id: string, @Req() req) {
-    const currentUserId = req.user.id;
-    return this.userService.getUserPosts(id, currentUserId);
-  }
-
-  @UseGuards(JwtAuthGuard)
   @Delete('me')
-  removeMyAccount(@Req() req) {
-    const userId = req.user.id;
-    return this.userService.remove(userId, userId);
+  removeMyAccount(@CurrentUser() user: AuthUser) {
+    return this.userService.remove(user.id);
+  }
+
+  @Get('search')
+  searchUsers(@Query('q') query?: string) {
+    if (!query?.trim()) return [];
+    return this.userService.searchUsers(query.trim());
+  }
+
+  @Get(':id')
+  getUserById(@Param('id') id: string) {
+    return this.userService.findOne(id);
   }
 }

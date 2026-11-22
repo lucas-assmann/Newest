@@ -1,3 +1,4 @@
 export interface JwtPayload {
-  sub: number;
+  /** id do usuário (UUID) */
+  sub: string;
 }

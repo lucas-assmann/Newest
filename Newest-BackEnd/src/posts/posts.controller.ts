@@ -6,10 +6,9 @@ import {
   Param,
   Patch,
   Post,
-  Req,
-  UseGuards,
 } from '@nestjs/common';
-import { JwtAuthGuard } from 'src/auth/jwt/jwt-auth.guard';
+import type { AuthUser } from 'src/auth/current-user.decorator';
+import { CurrentUser } from 'src/auth/current-user.decorator';
 import { CreatePostDto } from './dto/create-post.dto';
 import { PostsService } from './posts.service';
 
@@ -17,52 +16,38 @@ import { PostsService } from './posts.service';
 export class PostsController {
   constructor(private readonly postsService: PostsService) {}
 
-  @UseGuards(JwtAuthGuard)
   @Post()
-  async create(@Body() createPostDto: CreatePostDto, @Req() req) {
-    const userId = req.user.id;
-    return this.postsService.create(createPostDto, userId);
+  create(@Body() createPostDto: CreatePostDto, @CurrentUser() user: AuthUser) {
+    return this.postsService.create(createPostDto, user.id);
   }
 
-  @UseGuards(JwtAuthGuard)
   @Get('me')
-  async getMyPosts(@Req() req) {
-    const userId = req.user.id;
-    return this.postsService.findByUserId(userId, userId);
+  getMyPosts(@CurrentUser() user: AuthUser) {
+    return this.postsService.findByUserId(user.id, user.id);
   }
 
-  @UseGuards(JwtAuthGuard)
   @Get()
-  async getAllPosts(@Req() req) {
-    const userId = req.user.id;
-    return this.postsService.getAllPosts(userId);
+  getAllPosts(@CurrentUser() user: AuthUser) {
+    return this.postsService.getAllPosts(user.id);
   }
 
-  @UseGuards(JwtAuthGuard)
   @Get('user/:userId')
-  async getUserPosts(@Param('userId') userId: string, @Req() req) {
-    const currentUserId = req.user.id;
-    return this.postsService.findByUserId(userId, currentUserId);
+  getUserPosts(@Param('userId') userId: string, @CurrentUser() user: AuthUser) {
+    return this.postsService.findByUserId(userId, user.id);
   }
 
-  @UseGuards(JwtAuthGuard)
   @Get(':id')
-  async getPostById(@Param('id') id: string, @Req() req) {
-    const currentUserId = req.user.id;
-    return this.postsService.findOne(id, currentUserId);
+  getPostById(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    return this.postsService.findOne(id, user.id);
   }
 
-  @UseGuards(JwtAuthGuard)
   @Patch(':postId/like')
-  async toggleLike(@Param('postId') postId: string, @Req() req) {
-    const userId = req.user.id;
-    return this.postsService.toggleLike(postId, userId);
+  toggleLike(@Param('postId') postId: string, @CurrentUser() user: AuthUser) {
+    return this.postsService.toggleLike(postId, user.id);
   }
 
-  @UseGuards(JwtAuthGuard)
   @Delete(':id')
-  remove(@Param('id') id: string, @Req() req) {
-    const userId = req.user.id;
-    return this.postsService.remove(id, userId);
+  remove(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    return this.postsService.remove(id, user.id);
   }
 }

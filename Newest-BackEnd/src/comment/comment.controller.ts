@@ -1,14 +1,6 @@
-import {
-  Body,
-  Controller,
-  Delete,
-  Get,
-  Param,
-  Post,
-  Req,
-  UseGuards,
-} from '@nestjs/common';
-import { JwtAuthGuard } from 'src/auth/jwt/jwt-auth.guard';
+import { Body, Controller, Delete, Get, Param, Post } from '@nestjs/common';
+import type { AuthUser } from 'src/auth/current-user.decorator';
+import { CurrentUser } from 'src/auth/current-user.decorator';
 import { CommentService } from './comment.service';
 import { CreateCommentDto } from './dto/create-comment.dto';
 
@@ -16,29 +8,26 @@ import { CreateCommentDto } from './dto/create-comment.dto';
 export class CommentController {
   constructor(private readonly commentService: CommentService) {}
 
-  @UseGuards(JwtAuthGuard)
   @Post()
-  create(@Body() createCommentDto: CreateCommentDto, @Req() req) {
-    const userId = req.user.id;
-    return this.commentService.create(createCommentDto, userId);
+  create(
+    @Body() createCommentDto: CreateCommentDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.commentService.create(createCommentDto, user.id);
   }
 
-  @UseGuards(JwtAuthGuard)
   @Get('post/:postId')
   findByPostId(@Param('postId') postId: string) {
     return this.commentService.findByPostId(postId);
   }
 
-  @UseGuards(JwtAuthGuard)
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.commentService.findOne(id);
   }
 
-  @UseGuards(JwtAuthGuard)
   @Delete(':id')
-  remove(@Param('id') id: string, @Req() req) {
-    const userId = req.user.id;
-    return this.commentService.remove(id, userId);
+  remove(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    return this.commentService.remove(id, user.id);
   }
 }

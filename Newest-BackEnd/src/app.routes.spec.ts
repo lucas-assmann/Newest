@@ -1,0 +1,124 @@
+import './test-utils/test-env';
+
+import { INestApplication } from '@nestjs/common';
+import { Test } from '@nestjs/testing';
+import * as bcrypt from 'bcryptjs';
+import request from 'supertest';
+import { AppModule } from './app.module';
+import { configureApp } from './app.setup';
+import { PrismaService } from './prisma/prisma.service';
+import { createPrismaMock, PrismaMock } from './test-utils/prisma-mock';
+
+/**
+ * Sobe o app inteiro (módulos, guard global, validação) com o Prisma falso
+ * e testa as rotas como o front chamaria.
+ */
+describe('rotas da API', () => {
+  let app: INestApplication;
+  let prisma: PrismaMock;
+
+  beforeAll(async () => {
+    prisma = createPrismaMock();
+    const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
+      .overrideProvider(PrismaService)
+      .useValue(prisma)
+      .compile();
+
+    app = moduleRef.createNestApplication();
+    configureApp(app);
+    await app.init();
+  });
+
+  afterAll(() => app.close());
+
+  async function login() {
+    prisma.user.findUnique.mockResolvedValueOnce({
+      id: 'u1',
+      password: await bcrypt.hash('senha123', 4),
+    } as any);
+    const res = await request(app.getHttpServer())
+      .post('/auth/login')
+      .send({ email: 'ana@a.com', password: 'senha123' });
+    return res.body.accessToken as string;
+  }
+
+  describe('rotas públicas', () => {
+    it('GET /health responde sem token', async () => {
+      await request(app.getHttpServer())
+        .get('/health')
+        .expect(200, { status: 'ok' });
+    });
+
+    it('POST /user (cadastro) não exige token', async () => {
+      prisma.user.findUnique.mockResolvedValue(null);
+      prisma.user.create.mockResolvedValue({ id: 'u1', name: 'ana' } as any);
+
+      await request(app.getHttpServer())
+        .post('/user')
+        .send({ name: 'ana', email: 'ana@a.com', password: '123456' })
+        .expect(201);
+    });
+  });
+
+  describe('login', () => {
+    it('corpo inválido → 400', async () => {
+      await request(app.getHttpServer())
+        .post('/auth/login')
+        .send({ email: 'não é email' })
+        .expect(400);
+    });
+
+    it('usuário inexistente → 401', async () => {
+      prisma.user.findUnique.mockResolvedValueOnce(null);
+
+      await request(app.getHttpServer())
+        .post('/auth/login')
+        .send({ email: 'x@x.com', password: 'qualquer' })
+        .expect(401);
+    });
+
+    it('devolve accessToken (grafia certa) que funciona nas rotas protegidas', async () => {
+      const token = await login();
+      expect(token).toEqual(expect.any(String));
+
+      prisma.post.count.mockResolvedValue(0);
+      prisma.user.findUnique.mockResolvedValueOnce({ id: 'u1' } as any);
+
+      const res = await request(app.getHttpServer())
+        .get('/user/me')
+        .set('Authorization', `Bearer ${token}`)
+        .expect(200);
+      expect(prisma.user.findUnique).toHaveBeenLastCalledWith(
+        expect.objectContaining({ where: { id: 'u1' } }),
+      );
+      expect(res.body.id).toBe('u1');
+    });
+  });
+
+  describe('guard global', () => {
+    it.each([
+      ['get', '/posts'],
+      ['get', '/user/me'],
+      ['get', '/notification'],
+      ['post', '/comment'],
+    ] as const)('%s %s sem token → 401', async (method, url) => {
+      await request(app.getHttpServer())[method](url).expect(401);
+    });
+  });
+
+  describe('rotas removidas', () => {
+    it.each([
+      ['get', '/'],
+      ['get', '/user'],
+      ['get', '/user/u1/posts'],
+      ['post', '/user/avatar'],
+      ['get', '/uploads/avatars/x.jpg'],
+    ] as const)('%s %s → 404', async (method, url) => {
+      const token = await login();
+      await request(app.getHttpServer())
+        [method](url)
+        .set('Authorization', `Bearer ${token}`)
+        .expect(404);
+    });
+  });
+});
