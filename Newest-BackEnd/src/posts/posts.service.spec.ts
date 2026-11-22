@@ -1,0 +1,160 @@
+import {
+  BadRequestException,
+  ForbiddenException,
+  NotFoundException,
+  ServiceUnavailableException,
+} from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { createPrismaMock, PrismaMock } from 'src/test-utils/prisma-mock';
+import { CreatePostSchema } from './dto/create-post.dto';
+import { PostsService } from './posts.service';
+
+const img = 'https://res.cloudinary.com/demo/image/upload/v1/post.jpg';
+
+function sightengineResponse(body: unknown, ok = true) {
+  return { ok, json: () => Promise.resolve(body) } as Response;
+}
+
+const safe = {
+  status: 'success',
+  nudity: { raw: 0.01, partial: 0.01 },
+  violence: { prob: 0.01 },
+};
+
+describe('PostsService', () => {
+  let prisma: PrismaMock;
+  let fetchMock: jest.SpyInstance;
+
+  function makeService(env: Record<string, string> = {}) {
+    const config = { get: (key: string) => env[key] } as ConfigService;
+    return new PostsService(prisma, config);
+  }
+
+  const creds = { SIGHTENGINE_USER: 'u', SIGHTENGINE_SECRET: 's3cr3t' };
+
+  beforeEach(() => {
+    prisma = createPrismaMock();
+    prisma.post.create.mockResolvedValue({
+      id: 'p1',
+      likesCount: 0,
+      _count: { comments: 0 },
+    } as any);
+    fetchMock = jest.spyOn(global, 'fetch');
+  });
+
+  afterEach(() => fetchMock.mockRestore());
+
+  describe('moderação de imagem (create)', () => {
+    const dto = { title: 't', content: 'c', images: [img] };
+
+    it('sem credenciais do Sightengine recusa em vez de liberar', async () => {
+      await expect(makeService().create(dto, 'u1')).rejects.toBeInstanceOf(
+        ServiceUnavailableException,
+      );
+      expect(prisma.post.create).not.toHaveBeenCalled();
+    });
+
+    it('se o Sightengine responder erro HTTP, recusa', async () => {
+      fetchMock.mockResolvedValue(sightengineResponse({}, false));
+
+      await expect(makeService(creds).create(dto, 'u1')).rejects.toBeInstanceOf(
+        ServiceUnavailableException,
+      );
+      expect(prisma.post.create).not.toHaveBeenCalled();
+    });
+
+    it('se o Sightengine devolver status de falha, recusa', async () => {
+      fetchMock.mockResolvedValue(
+        sightengineResponse({ status: 'failure', error: { message: 'x' } }),
+      );
+
+      await expect(makeService(creds).create(dto, 'u1')).rejects.toBeInstanceOf(
+        ServiceUnavailableException,
+      );
+    });
+
+    it('se a rede falhar, recusa', async () => {
+      fetchMock.mockRejectedValue(new TypeError('fetch failed'));
+
+      await expect(makeService(creds).create(dto, 'u1')).rejects.toBeInstanceOf(
+        ServiceUnavailableException,
+      );
+    });
+
+    it('imagem imprópria lança BadRequestException', async () => {
+      fetchMock.mockResolvedValue(
+        sightengineResponse({ ...safe, nudity: { raw: 0.9, partial: 0 } }),
+      );
+
+      await expect(makeService(creds).create(dto, 'u1')).rejects.toBeInstanceOf(
+        BadRequestException,
+      );
+      expect(prisma.post.create).not.toHaveBeenCalled();
+    });
+
+    it('imagem segura cria o post, e o segredo não vai na URL', async () => {
+      fetchMock.mockResolvedValue(sightengineResponse(safe));
+
+      await makeService(creds).create(dto, 'u1');
+
+      expect(prisma.post.create).toHaveBeenCalled();
+      const [url, init] = fetchMock.mock.calls[0];
+      expect(String(url)).not.toContain('s3cr3t');
+      expect(init?.method).toBe('POST');
+    });
+
+    it('post sem imagem não chama o Sightengine', async () => {
+      await makeService().create({ title: 't', content: 'c' }, 'u1');
+
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect(prisma.post.create).toHaveBeenCalled();
+    });
+  });
+
+  describe('remove', () => {
+    it('post inexistente lança NotFoundException (404, não 500)', async () => {
+      prisma.post.findUnique.mockResolvedValue(null);
+
+      await expect(makeService().remove('p1', 'u1')).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
+    });
+
+    it('post de outra pessoa lança ForbiddenException (403, não 401)', async () => {
+      prisma.post.findUnique.mockResolvedValue({ authorId: 'outro' } as any);
+
+      await expect(makeService().remove('p1', 'u1')).rejects.toBeInstanceOf(
+        ForbiddenException,
+      );
+      expect(prisma.post.delete).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('findOne', () => {
+    it('post inexistente lança NotFoundException', async () => {
+      prisma.post.findUnique.mockResolvedValue(null);
+
+      await expect(makeService().findOne('p1', 'u1')).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
+    });
+  });
+});
+
+describe('CreatePostSchema', () => {
+  it('aceita imagens do Cloudinary e recusa outras URLs', () => {
+    const base = { title: 't', content: 'c' };
+    expect(CreatePostSchema.safeParse({ ...base, images: [img] }).success).toBe(
+      true,
+    );
+    expect(
+      CreatePostSchema.safeParse({
+        ...base,
+        images: ['https://site-qualquer.com/x.jpg'],
+      }).success,
+    ).toBe(false);
+    expect(
+      CreatePostSchema.safeParse({ ...base, images: ['não é url'] }).success,
+    ).toBe(false);
+  });
+});

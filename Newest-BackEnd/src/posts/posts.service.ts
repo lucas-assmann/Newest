@@ -1,7 +1,10 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
-  UnauthorizedException,
+  Logger,
+  NotFoundException,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Like } from '@prisma/client';
@@ -15,25 +18,54 @@ export class PostsService {
     private configService: ConfigService,
   ) {}
 
-  private async checkImage(imageUrl: string): Promise<boolean> {
-    const user = this.configService.get<string>('SIGHTENGINE_USER');
-    const secret = this.configService.get<string>('SIGHTENGINE_SECRET');
-    const response = await fetch(
-      `https://api.sightengine.com/1.0/check.json?url=${encodeURIComponent(imageUrl)}&models=nudity,violence&api_user=${user}&api_secret=${secret}`,
+  private readonly logger = new Logger(PostsService.name);
+
+  /**
+   * Verifica a imagem no Sightengine. Se a verificação não puder ser feita
+   * (sem credenciais, erro de rede ou resposta de falha), RECUSA o post:
+   * nunca publica uma imagem que não foi verificada.
+   */
+  private async isImageSafe(imageUrl: string): Promise<boolean> {
+    const apiUser = this.configService.get<string>('SIGHTENGINE_USER');
+    const apiSecret = this.configService.get<string>('SIGHTENGINE_SECRET');
+    const unavailable = new ServiceUnavailableException(
+      'Não foi possível verificar as imagens agora. Tente novamente mais tarde.',
     );
 
-    const data = await response.json();
-    console.log('Sightengine response:', JSON.stringify(data));
+    if (!apiUser || !apiSecret) {
+      this.logger.error('SIGHTENGINE_USER/SIGHTENGINE_SECRET não configurados');
+      throw unavailable;
+    }
 
-    if (
+    let data: any;
+    try {
+      // POST com o segredo no corpo, para ele não aparecer em logs de URL.
+      const response = await fetch('https://api.sightengine.com/1.0/check.json', {
+        method: 'POST',
+        body: new URLSearchParams({
+          url: imageUrl,
+          models: 'nudity,violence',
+          api_user: apiUser,
+          api_secret: apiSecret,
+        }),
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      data = await response.json();
+    } catch (error) {
+      this.logger.error(`Falha ao chamar o Sightengine: ${String(error)}`);
+      throw unavailable;
+    }
+
+    if (data?.status !== 'success') {
+      this.logger.error(`Sightengine respondeu falha: ${data?.error?.message}`);
+      throw unavailable;
+    }
+
+    return !(
       data.nudity?.raw > 0.5 ||
       data.nudity?.partial > 0.7 ||
       data.violence?.prob > 0.7
-    ) {
-      return false;
-    }
-
-    return true;
+    );
   }
 
   async toggleLike(postId: string, userId: string) {
@@ -206,7 +238,7 @@ export class PostsService {
       },
     });
 
-    if (!post) throw new Error('Post não encontrado');
+    if (!post) throw new NotFoundException('Post não encontrado');
 
     return {
       ...post,
@@ -219,7 +251,7 @@ export class PostsService {
   async create(createPostDto: CreatePostDto, userId: string) {
     if (createPostDto.images && createPostDto.images.length > 0) {
       const results = await Promise.all(
-        createPostDto.images.map((url) => this.checkImage(url)),
+        createPostDto.images.map((url) => this.isImageSafe(url)),
       );
 
       if (results.some((r) => r === false)) {
@@ -284,11 +316,11 @@ export class PostsService {
     });
 
     if (!post) {
-      throw new Error('Post não encontrado');
+      throw new NotFoundException('Post não encontrado');
     }
 
     if (post.authorId !== userId) {
-      throw new UnauthorizedException(
+      throw new ForbiddenException(
         'Você não tem permissão para deletar este post',
       );
     }

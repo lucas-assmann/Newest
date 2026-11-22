@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -16,6 +17,7 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { extname } from 'path';
 import { JwtAuthGuard } from 'src/auth/jwt/jwt-auth.guard';
+import { ChangePasswordDto } from './dto/change-password.dto';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { UserService } from './user.service';
@@ -58,12 +60,6 @@ export class UserController {
   }
 
   @UseGuards(JwtAuthGuard)
-  @Get()
-  findAll() {
-    return this.userService.findAll();
-  }
-
-  @UseGuards(JwtAuthGuard)
   @Get('me')
   async getMe(@Req() req) {
     const userId = req.user.id;
@@ -75,6 +71,12 @@ export class UserController {
   update(@Req() req, @Body() updateUserDto: UpdateUserDto) {
     const userId = req.user.id;
     return this.userService.update(userId, updateUserDto);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Patch('me/password')
+  changePassword(@Req() req, @Body() dto: ChangePasswordDto) {
+    return this.userService.changePassword(req.user.id, dto);
   }
 
   @UseGuards(JwtAuthGuard)
@@ -105,7 +107,7 @@ export class UserController {
     const userId = req.user.id;
 
     if (!file) {
-      throw new Error('Nenhum arquivo foi enviado');
+      throw new BadRequestException('Nenhum arquivo foi enviado');
     }
 
     const avatarUrl = `/uploads/avatars/${file.filename}`;

@@ -1,4 +1,8 @@
-import { Injectable } from '@nestjs/common';
+import {
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from 'src/prisma.service';
 import { CreateCommentDto } from './dto/create-comment.dto';
 
@@ -108,11 +112,13 @@ export class CommentService {
     });
 
     if (!comment) {
-      throw new Error('Comentário não encontrado');
+      throw new NotFoundException('Comentário não encontrado');
     }
 
     if (comment.authorId !== userId) {
-      throw new Error('Você não tem permissão para deletar este comentário');
+      throw new ForbiddenException(
+        'Você não tem permissão para deletar este comentário',
+      );
     }
 
     return await this.prisma.comment.delete({ where: { id } });
