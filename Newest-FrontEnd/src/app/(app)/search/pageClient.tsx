@@ -29,7 +29,7 @@ export default function SearchPageClient() {
           <div className="max-w-2xl mx-auto mt-8 p-4 bg-muted/30 rounded-lg">
             <h3 className="font-semibold text-sm mb-2">💡 Dicas de busca</h3>
             <ul className="text-xs text-muted-foreground space-y-1">
-              <li>• Digite o nome ou email do usuário</li>
+              <li>• Digite o nome do usuário</li>
               <li>• A busca é feita em tempo real</li>
             </ul>
           </div>

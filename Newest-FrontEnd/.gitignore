@@ -40,3 +40,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# variáveis de ambiente locais (use .env.example como modelo)
+.env

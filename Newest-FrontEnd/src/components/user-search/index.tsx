@@ -12,7 +12,6 @@ import { useState } from 'react';
 interface SearchedUser {
   id: string;
   name: string;
-  email: string;
   avatar: string | null;
   bio: string | null;
   totalPosts: number;
@@ -104,8 +103,6 @@ export function UserSearch() {
                     <div className="flex-1 min-w-0">
                       <p className="font-semibold text-sm truncate">{user.name}</p>
                       <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                        <span className="truncate">{user.email}</span>
-                        <span>•</span>
                         <span>{user.totalPosts} {user.totalPosts === 1 ? 'post' : 'posts'}</span>
                       </div>
                       {user.bio && (
@@ -125,7 +122,7 @@ export function UserSearch() {
               </div>
               <p className="text-sm font-medium">Nenhum usuário encontrado</p>
               <p className="text-xs text-muted-foreground mt-1">
-                Tente buscar por outro nome ou email
+                Tente buscar por outro nome
               </p>
             </div>
           )}

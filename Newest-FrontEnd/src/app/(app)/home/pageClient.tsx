@@ -42,12 +42,11 @@ export default function HomeClient() {
       queryClient.invalidateQueries({ queryKey: ['posts'] });
     },
     onError: (error: any) => {
+      // Mostra o motivo vindo da API (imagem imprópria, moderação fora do ar, etc).
       const message = error?.response?.data?.message;
-      if (message === 'Uma ou mais imagens contêm conteúdo não permitido') {
-        setErrors({ image: message });
-      } else {
-        console.error('Erro ao criar post:', error);
-      }
+      setErrors({
+        image: typeof message === 'string' ? message : 'Erro ao criar post. Tente novamente.',
+      });
     },
   });
 

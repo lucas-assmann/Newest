@@ -1,7 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { createContext, ReactNode, useEffect, useState } from "react";
+import { createContext, ReactNode, useState } from "react";
 import { api } from "../services/api";
 import { getAcessToken, logout as removeAccessToken } from "../services/auth.service";
 
@@ -17,19 +16,10 @@ export const AuthContext = createContext<AuthContextData>(
 );
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const router = useRouter();
-
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
     const token = getAcessToken();
     return !!token;
   });
-
-  useEffect(() => {
-    const token = getAcessToken();
-    if (token) {
-      api.defaults.headers.common.Authorization = `Bearer ${token}`;
-    }
-  }, []);
 
   async function signIn(email: string, password: string) {
     const response = await api.post("auth/login", { email, password });
@@ -37,7 +27,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { acessToken } = response.data;
 
     localStorage.setItem("token", acessToken);
-    api.defaults.headers.common.Authorization = `Bearer ${acessToken}`;
 
     setIsAuthenticated(true);
 
@@ -56,8 +45,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function logout() {
     removeAccessToken();
-
-    delete api.defaults.headers.common.Authorization;
 
     setIsAuthenticated(false);
 

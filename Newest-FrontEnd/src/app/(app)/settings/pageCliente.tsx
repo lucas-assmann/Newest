@@ -10,7 +10,7 @@ import { AuthGuard } from "@/guard/AuthGuard";
 import { useCloudinaryUpload } from "@/hooks/use-cloudinary";
 import { queryClient } from "@/lib/react-query";
 import { UpdateProfileSchema } from "@/schemas/settings.schema";
-import { deleteMyAccount, getMyInformations, updateMyProfile, uploadAvatar } from "@/services/user.service";
+import { changeMyPassword, deleteMyAccount, getMyInformations, updateMyProfile, uploadAvatar } from "@/services/user.service";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { AlertCircle, AlertTriangle, Camera, CheckCircle, FileText, Loader2, Lock, Mail, User, X } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -36,6 +36,7 @@ export default function SettingsClient() {
   const [name, setName] = useState<string | undefined>(undefined);
   const [bio, setBio] = useState<string | undefined>(undefined);
   const [email, setEmail] = useState<string | undefined>(undefined);
+  const [currentPassword, setCurrentPassword] = useState<string>("");
   const [password, setPassword] = useState<string>("");
   const [confirmPassword, setConfirmPassword] = useState<string>("");
   const { uploadImage, uploading } = useCloudinaryUpload();
@@ -45,7 +46,12 @@ export default function SettingsClient() {
   const currentEmail = email ?? user?.email ?? "";
 
   const mutation = useMutation({
-    mutationFn: updateMyProfile,
+    mutationFn: async ({ newPassword, ...profile }: { name: string; bio: string; email?: string; newPassword?: string }) => {
+      await updateMyProfile(profile);
+      if (newPassword) {
+        await changeMyPassword({ currentPassword, newPassword });
+      }
+    },
     onSuccess: async () => {
       if (avatarFile) {
         try {
@@ -59,6 +65,7 @@ export default function SettingsClient() {
       queryClient.invalidateQueries({ queryKey: ['myProfile'] });
       queryClient.invalidateQueries({ queryKey: ['myUser'] });
       setShowSuccessModal(true);
+      setCurrentPassword("");
       setPassword("");
       setConfirmPassword("");
       setErrors({});
@@ -123,6 +130,7 @@ export default function SettingsClient() {
       name: finalName,
       email: finalEmail,
       bio: finalBio,
+      currentPassword: currentPassword || '',
       password: password || '',
       confirmPassword: confirmPassword || '',
     });
@@ -137,20 +145,12 @@ export default function SettingsClient() {
       return;
     }
 
-    const updateData: any = {
+    mutation.mutate({
       name: finalName.trim(),
       bio: finalBio.trim(),
-    };
-
-    if (email !== undefined && email !== user?.email) {
-      updateData.email = finalEmail.trim();
-    }
-
-    if (password) {
-      updateData.password = password;
-    }
-
-    mutation.mutate(updateData);
+      email: email !== undefined && email !== user?.email ? finalEmail.trim() : undefined,
+      newPassword: password || undefined,
+    });
   };
 
   const handleDeleteClick = () => {
@@ -342,6 +342,25 @@ export default function SettingsClient() {
                     />
                     {errors.email && (
                       <p className="text-sm text-destructive">{errors.email}</p>
+                    )}
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="currentPassword" className="text-sm font-medium flex items-center gap-2">
+                      <Lock className="h-4 w-4" />
+                      Senha atual
+                    </Label>
+                    <Input
+                      id="currentPassword"
+                      value={currentPassword}
+                      onChange={(e) => setCurrentPassword(e.target.value)}
+                      type="password"
+                      autoComplete="current-password"
+                      placeholder="Necessária para trocar a senha"
+                      className="h-12"
+                    />
+                    {errors.currentPassword && (
+                      <p className="text-sm text-destructive">{errors.currentPassword}</p>
                     )}
                   </div>
 

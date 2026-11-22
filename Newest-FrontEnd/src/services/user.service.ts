@@ -11,19 +11,26 @@ export const getMyInformations = async (): Promise<User> => {
   return data;
 };
 
-export const updateMyProfile = async (data: {
+/** Atualiza nome, bio e email. A senha tem endpoint próprio: changeMyPassword. */
+export const updateMyProfile = async ({
+  name,
+  bio,
+  email,
+}: {
   name?: string;
   bio?: string;
   email?: string;
-  password?: string;
 }) => {
-  const { data: response } = await api.patch("/user/me", data);
+  const { data: response } = await api.patch("/user/me", { name, bio, email });
   return response;
 };
 
-export const getAllUsers = async (): Promise<User[]> => {
-  const { data } = await api.get("/user");
-  return data;
+export const changeMyPassword = async (data: {
+  currentPassword: string;
+  newPassword: string;
+}) => {
+  const { data: response } = await api.patch("/user/me/password", data);
+  return response;
 };
 
 export const searchUsers = async (query: string) => {

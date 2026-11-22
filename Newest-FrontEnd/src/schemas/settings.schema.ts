@@ -9,17 +9,16 @@ export const UpdateProfileSchema = z.object({
   bio: z.string()
     .max(200, 'Bio pode ter no máximo 200 caracteres')
     .optional(),
+  currentPassword: z.string().optional(),
   password: z.string()
     .min(6, 'Senha deve ter pelo menos 6 caracteres')
     .optional()
     .or(z.literal('')),
   confirmPassword: z.string().optional(),
-}).refine((data) => {
-  if (data.password && data.password !== '') {
-    return data.password === data.confirmPassword;
-  }
-  return true;
-}, {
+}).refine((data) => !data.password || !!data.currentPassword, {
+  message: "Informe a senha atual para trocar a senha",
+  path: ["currentPassword"],
+}).refine((data) => !data.password || data.password === data.confirmPassword, {
   message: "As senhas não coincidem",
   path: ["confirmPassword"],
 });
