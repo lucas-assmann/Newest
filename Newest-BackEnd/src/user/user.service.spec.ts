@@ -55,9 +55,9 @@ describe('UserService', () => {
     it('update com nome em uso lança ConflictException', async () => {
       prisma.user.findFirst.mockResolvedValueOnce({ id: 'outro' } as any);
 
-      await expect(
-        service.update('1', { name: 'ana' }),
-      ).rejects.toBeInstanceOf(ConflictException);
+      await expect(service.update('1', { name: 'ana' })).rejects.toBeInstanceOf(
+        ConflictException,
+      );
     });
   });
 

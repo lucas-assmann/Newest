@@ -26,9 +26,9 @@ describe('schemas de usuário', () => {
       schema.safeParse({ ...base, avatar: 'https://site-qualquer.com/x.jpg' })
         .success,
     ).toBe(false);
-    expect(schema.safeParse({ ...base, avatar: 'javascript:alert(1)' }).success).toBe(
-      false,
-    );
+    expect(
+      schema.safeParse({ ...base, avatar: 'javascript:alert(1)' }).success,
+    ).toBe(false);
   });
 
   it('ChangePasswordSchema exige senha atual e nova com 6+ caracteres', () => {

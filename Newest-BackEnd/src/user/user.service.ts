@@ -1,12 +1,11 @@
 import {
   BadRequestException,
   ConflictException,
-  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import * as bcrypt from 'bcryptjs';
-import { PrismaService } from 'src/prisma.service';
+import { PrismaService } from 'src/prisma/prisma.service';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
@@ -140,21 +139,6 @@ export class UserService {
     return { message: 'Senha alterada com sucesso' };
   }
 
-  async updateAvatar(userId: string, avatarUrl: string) {
-    return this.prisma.user.update({
-      where: { id: userId },
-      data: { avatar: avatarUrl },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        bio: true,
-        avatar: true,
-        createdAt: true,
-      },
-    });
-  }
-
   /** Busca pública: só pelo nome, sem expor email. */
   async searchUsers(query: string) {
     const results = await this.prisma.user.findMany({
@@ -215,53 +199,8 @@ export class UserService {
     };
   }
 
-  async getUserPosts(userId: string, currentUserId?: string): Promise<any[]> {
-    const posts = await this.prisma.post.findMany({
-      where: { authorId: userId },
-      select: {
-        id: true,
-        title: true,
-        content: true,
-        images: true,
-        likesCount: true,
-        createdAt: true,
-        author: {
-          select: {
-            id: true,
-            name: true,
-            avatar: true,
-          },
-        },
-        likes: currentUserId
-          ? {
-              where: { userId: currentUserId },
-              select: { id: true },
-            }
-          : false,
-        _count: {
-          select: {
-            comments: true,
-          },
-        },
-      },
-      orderBy: {
-        createdAt: 'desc',
-      },
-    });
-
-    return posts.map((post: any): any => ({
-      ...post,
-      likes: post.likesCount,
-      comments: post._count.comments,
-      isLiked: Array.isArray(post.likes) && post.likes.length > 0,
-    }));
-  }
-
-  async remove(id: string, currentUserId: string) {
-    if (id !== currentUserId) {
-      throw new ForbiddenException('Você só pode deletar sua própria conta');
-    }
-
-    return await this.prisma.user.delete({ where: { id } });
+  async remove(userId: string) {
+    await this.prisma.user.delete({ where: { id: userId } });
+    return { message: 'Conta removida' };
   }
 }
