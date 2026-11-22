@@ -3,19 +3,14 @@
 import { Input } from '@/components/ui/input';
 import { useDebounce } from '@/hooks/use-debounce';
 import { cn } from '@/lib/utils';
-import { getMyProfile, searchUsers } from '@/services/user.service';
+import { useCurrentUser } from '@/hooks/useCurrentUser';
+import { queryKeys } from '@/lib/query-keys';
+import { searchUsers } from '@/services/user.service';
+import type { SearchedUser } from '@/types/user.types';
 import { useQuery } from '@tanstack/react-query';
 import { Loader2, Search, User } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
-
-interface SearchedUser {
-  id: string;
-  name: string;
-  avatar: string | null;
-  bio: string | null;
-  totalPosts: number;
-}
 
 export function UserSearch() {
   const [query, setQuery] = useState('');
@@ -23,13 +18,10 @@ export function UserSearch() {
   const debouncedQuery = useDebounce(query, 500);
   const router = useRouter();
 
-  const { data: myProfile } = useQuery({
-    queryKey: ['myProfile'],
-    queryFn: getMyProfile,
-  });
+  const { data: myProfile } = useCurrentUser();
 
   const { data: users, isLoading } = useQuery<SearchedUser[]>({
-    queryKey: ['searchUsers', debouncedQuery],
+    queryKey: queryKeys.searchUsers(debouncedQuery),
     queryFn: () => searchUsers(debouncedQuery),
     enabled: debouncedQuery.length > 0,
   });

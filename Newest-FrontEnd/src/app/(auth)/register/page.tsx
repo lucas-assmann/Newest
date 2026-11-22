@@ -1,4 +1,4 @@
-import { CardDemo } from "@/components/card";
+import { RegisterCard } from "@/components/register-card";
 
 export const metadata = {
   title: "Criar conta",
@@ -7,7 +7,7 @@ export const metadata = {
 export default function SignUp() {
   return (
     <div className="w-full h-screen flex justify-center items-center">
-      <CardDemo />
+      <RegisterCard />
     </div>
   );
 }

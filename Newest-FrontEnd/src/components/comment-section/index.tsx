@@ -1,5 +1,7 @@
 'use client';
 
+import { getErrorMessage } from '@/lib/errors';
+import { queryKeys } from '@/lib/query-keys';
 import { CreateCommentSchema } from '@/schemas/comment.schema';
 import { createComment, getCommentsByPostId } from '@/services/comment.service';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -8,7 +10,7 @@ import { useState } from 'react';
 import Comment from '../comment';
 import { Button } from '../ui/button';
 import { Separator } from '../ui/separator';
-import { MentionTextarea } from '../mention-area-props';
+import { MentionTextarea } from '../mention-textarea';
 
 
 interface CommentSectionProps {
@@ -21,7 +23,7 @@ export default function CommentSection({ postId }: CommentSectionProps) {
   const queryClient = useQueryClient();
 
   const { data: comments, isLoading } = useQuery({
-    queryKey: ['comments', postId],
+    queryKey: queryKeys.comments(postId),
     queryFn: () => getCommentsByPostId(postId),
   });
 
@@ -30,10 +32,11 @@ export default function CommentSection({ postId }: CommentSectionProps) {
     onSuccess: () => {
       setContent('');
       setErrors({});
-      queryClient.invalidateQueries({ queryKey: ['comments', postId] });
-      queryClient.invalidateQueries({ queryKey: ['posts'] });
-      queryClient.invalidateQueries({ queryKey: ['myPosts'] });
-      queryClient.invalidateQueries({ queryKey: ['post', postId] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.comments(postId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.posts.all }); // contador de comentários
+    },
+    onError: (error) => {
+      setErrors({ content: getErrorMessage(error, 'Erro ao comentar. Tente novamente.') });
     },
   });
 
@@ -125,16 +128,7 @@ export default function CommentSection({ postId }: CommentSectionProps) {
         {comments && comments.length > 0 && (
           <div className="space-y-3">
             {comments.map((comment) => (
-              <Comment
-                key={comment.id}
-                id={comment.id}
-                content={comment.content}
-                authorId={comment.author.id}
-                authorName={comment.author.name}
-                authorAvatar={comment.author.avatar}
-                createdAt={comment.createdAt}
-                postId={postId}
-              />
+              <Comment key={comment.id} comment={comment} />
             ))}
           </div>
         )}

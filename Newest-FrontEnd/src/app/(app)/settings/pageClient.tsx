@@ -1,23 +1,29 @@
 "use client"
 
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { AlertCircle, AlertTriangle, Camera, CheckCircle, FileText, Loader2, Lock, Mail, User, X } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { useRef, useState } from "react";
 import { DialogNoCloseButton } from "@/components/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Textarea } from "@/components/ui/textarea";
-import { AuthGuard } from "@/guard/AuthGuard";
-import { useCloudinaryUpload } from "@/hooks/use-cloudinary";
-import { queryClient } from "@/lib/react-query";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { useImageUpload, validateImageFile } from "@/hooks/useImageUpload";
+import { getAvatarUrl as avatarOrDefault } from "@/lib/avatar";
+import { getErrorMessage } from "@/lib/errors";
+import { queryKeys } from "@/lib/query-keys";
 import { UpdateProfileSchema } from "@/schemas/settings.schema";
-import { changeMyPassword, deleteMyAccount, getMyInformations, updateMyProfile, uploadAvatar } from "@/services/user.service";
-import { useMutation, useQuery } from "@tanstack/react-query";
-import { AlertCircle, AlertTriangle, Camera, CheckCircle, FileText, Loader2, Lock, Mail, User, X } from "lucide-react";
-import { useRouter } from "next/navigation";
-import { useRef, useState } from "react";
+import { logout } from "@/services/auth.service";
+import { changeMyPassword, deleteMyAccount, updateMyProfile, uploadAvatar } from "@/services/user.service";
 
 export default function SettingsClient() {
   const router = useRouter();
+  // Antes vinha de lib/react-query: um QueryClient diferente do app, e as
+  // invalidações daqui não atualizavam nada.
+  const queryClient = useQueryClient();
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -25,13 +31,7 @@ export default function SettingsClient() {
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
 
-  const {
-    data: user,
-    isLoading: userLoading
-  } = useQuery({
-    queryKey: ['myUser'],
-    queryFn: getMyInformations,
-  });
+  const { data: user, isLoading: userLoading } = useCurrentUser();
 
   const [name, setName] = useState<string | undefined>(undefined);
   const [bio, setBio] = useState<string | undefined>(undefined);
@@ -39,7 +39,7 @@ export default function SettingsClient() {
   const [currentPassword, setCurrentPassword] = useState<string>("");
   const [password, setPassword] = useState<string>("");
   const [confirmPassword, setConfirmPassword] = useState<string>("");
-  const { uploadImage, uploading } = useCloudinaryUpload();
+  const { uploadImage } = useImageUpload();
 
   const currentName = name ?? user?.name ?? "";
   const currentBio = bio ?? user?.bio ?? "";
@@ -47,46 +47,44 @@ export default function SettingsClient() {
 
   const mutation = useMutation({
     mutationFn: async ({ newPassword, ...profile }: { name: string; bio: string; email?: string; newPassword?: string }) => {
+      // O avatar vai junto: se o envio falhar, o erro aparece na tela (antes era só um console.error).
+      if (avatarFile) {
+        await uploadAvatar(await uploadImage(avatarFile));
+      }
       await updateMyProfile(profile);
       if (newPassword) {
         await changeMyPassword({ currentPassword, newPassword });
       }
     },
-    onSuccess: async () => {
-      if (avatarFile) {
-        try {
-          const avatarUrl = await uploadImage(avatarFile);
-          await uploadAvatar(avatarUrl);
-        } catch (err) {
-          console.error('Erro ao fazer upload do avatar:', err);
-        }
-      }
-
-      queryClient.invalidateQueries({ queryKey: ['myProfile'] });
-      queryClient.invalidateQueries({ queryKey: ['myUser'] });
+    onSuccess: () => {
       setShowSuccessModal(true);
       setCurrentPassword("");
       setPassword("");
       setConfirmPassword("");
       setErrors({});
-      setAvatarPreview(null);
-      setAvatarFile(null);
+      handleRemoveAvatar();
     },
-    onError: (error: any) => {
-      const message = error?.response?.data?.message || "Erro ao atualizar perfil. Tente novamente.";
-      setErrors({ general: message });
-    }
+    onError: (error) => {
+      setErrors({
+        general: getErrorMessage(error, error instanceof Error ? error.message : "Erro ao atualizar perfil. Tente novamente."),
+      });
+    },
+    onSettled: () => {
+      // Nome e avatar aparecem no perfil e em todos os posts.
+      queryClient.invalidateQueries({ queryKey: queryKeys.me });
+      queryClient.invalidateQueries({ queryKey: queryKeys.posts.all });
+    },
   });
 
   const deleteMutation = useMutation({
     mutationFn: deleteMyAccount,
     onSuccess: () => {
-      localStorage.removeItem('token');
+      logout();
+      queryClient.clear();
       router.push('/');
     },
-    onError: (error: any) => {
-      const message = error?.response?.data?.message || "Erro ao deletar conta. Tente novamente.";
-      setErrors({ general: message });
+    onError: (error) => {
+      setErrors({ general: getErrorMessage(error, "Erro ao deletar conta. Tente novamente.") });
       setShowDeleteModal(false);
     }
   });
@@ -95,79 +93,59 @@ export default function SettingsClient() {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (!file.type.startsWith('image/')) {
-      setErrors({ avatar: 'Por favor, selecione uma imagem válida' });
+    const invalid = validateImageFile(file);
+    if (invalid) {
+      setErrors({ avatar: invalid });
       return;
     }
 
-    if (file.size > 5 * 1024 * 1024) {
-      setErrors({ avatar: 'A imagem deve ter no máximo 5MB' });
-      return;
-    }
-
-    const preview = URL.createObjectURL(file);
-    setAvatarPreview(preview);
+    setAvatarPreview(URL.createObjectURL(file));
     setAvatarFile(file);
     setErrors({});
   };
 
-  const handleRemoveAvatar = () => {
+  function handleRemoveAvatar() {
+    if (avatarPreview) URL.revokeObjectURL(avatarPreview);
     setAvatarPreview(null);
     setAvatarFile(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
-  };
+  }
 
   const handleSave = () => {
     setErrors({});
 
-    const finalName = name ?? user?.name ?? "";
-    const finalEmail = email ?? user?.email ?? "";
-    const finalBio = bio ?? user?.bio ?? "";
-
     const result = UpdateProfileSchema.safeParse({
-      name: finalName,
-      email: finalEmail,
-      bio: finalBio,
-      currentPassword: currentPassword || '',
-      password: password || '',
-      confirmPassword: confirmPassword || '',
+      name: currentName,
+      email: currentEmail,
+      bio: currentBio,
+      currentPassword,
+      password,
+      confirmPassword,
     });
 
     if (!result.success) {
       const fieldErrors: Record<string, string> = {};
       result.error.issues.forEach((err) => {
-        const field = err.path[0] as string;
-        fieldErrors[field] = err.message;
+        fieldErrors[String(err.path[0])] = err.message;
       });
       setErrors(fieldErrors);
       return;
     }
 
     mutation.mutate({
-      name: finalName.trim(),
-      bio: finalBio.trim(),
-      email: email !== undefined && email !== user?.email ? finalEmail.trim() : undefined,
+      name: currentName.trim(),
+      bio: currentBio.trim(),
+      email: currentEmail !== user?.email ? currentEmail.trim() : undefined,
       newPassword: password || undefined,
     });
   };
 
-  const handleDeleteClick = () => {
-    setShowDeleteModal(true);
-  };
-
-  const handleConfirmDelete = () => {
-    deleteMutation.mutate();
-  };
-
-  const handleCancelDelete = () => {
-    setShowDeleteModal(false);
-  };
-
-  const handleCloseSuccessModal = () => {
-    setShowSuccessModal(false);
-  };
+  const handleDeleteClick = () => setShowDeleteModal(true);
+  const handleConfirmDelete = () => deleteMutation.mutate();
+  const handleCancelDelete = () => setShowDeleteModal(false);
+  const handleCloseSuccessModal = () => setShowSuccessModal(false);
 
   if (userLoading) {
     return (
@@ -177,11 +155,7 @@ export default function SettingsClient() {
     );
   }
 
-  const getAvatarUrl = () => {
-    if (avatarPreview) return avatarPreview;
-    if (user?.avatar) return user.avatar;
-    return '/profilePicture.png';
-  };
+  const getAvatarUrl = () => avatarPreview ?? avatarOrDefault(user?.avatar);
 
   return (
     <>
@@ -218,10 +192,7 @@ export default function SettingsClient() {
         disabled={deleteMutation.isPending}
         showCancelButton={true}
         showSubmitButton={true}
-      />
-
-      <AuthGuard>
-        <div className="h-full w-full max-w-lg mx-auto bg-background">
+      />        <div className="h-full w-full max-w-lg mx-auto bg-background">
           <div className="h-full bg-card border border-border rounded-2xl shadow-lg overflow-hidden">
             <div className="relative h-28 bg-linear-to-br from-primary/10 via-primary/5 to-transparent">
               <div className="flex justify-end items-start w-full p-8">
@@ -445,8 +416,6 @@ export default function SettingsClient() {
               </div>
             </div>
           </div>
-        </div>
-      </AuthGuard >
-    </>
+        </div>    </>
   );
 }

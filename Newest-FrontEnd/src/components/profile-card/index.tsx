@@ -1,9 +1,8 @@
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { formatDateLong } from "@/lib/settings.date";
-import { postSettings } from "@/lib/settings.post";
-import { getMyProfile } from "@/services/user.service";
-import { useQuery } from "@tanstack/react-query";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { getAvatarUrl } from "@/lib/avatar";
+import { formatDateLong, formatPostCount } from "@/lib/format";
 import { Calendar, FileText, Settings } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { SidebarTrigger } from "../ui/sidebar";
@@ -11,18 +10,7 @@ import { SidebarTrigger } from "../ui/sidebar";
 export default function ProfileCard() {
   const router = useRouter();
 
-  const {
-    data: user,
-    isLoading
-  } = useQuery({
-    queryKey: ['myProfile'],
-    queryFn: getMyProfile,
-  });
-
-  const getAvatarUrl = () => {
-    if (user?.avatar) return user.avatar;
-    return '/profilePicture.png';
-  };
+  const { data: user, isLoading } = useCurrentUser();
 
   if (isLoading) {
     return (
@@ -51,7 +39,7 @@ export default function ProfileCard() {
           <div className="relative group">
             <div className="w-32 h-32 rounded-full overflow-hidden ring-4 ring-background shadow-xl">
               <img
-                src={getAvatarUrl()}
+                src={getAvatarUrl(user?.avatar)}
                 alt="Profile Picture"
                 className="object-cover w-full h-full"
               />
@@ -88,7 +76,7 @@ export default function ProfileCard() {
 
             <div className="flex items-center gap-1.5 text-muted-foreground">
               <FileText className="h-4 w-4" />
-              <span>{postSettings(user?.totalPosts ?? 0)}</span>
+              <span>{formatPostCount(user?.totalPosts ?? 0)}</span>
             </div>
           </div>
         </div>

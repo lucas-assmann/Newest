@@ -1,5 +1,9 @@
 'use client';
 
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { AlertTriangle, ChevronLeft, ChevronRight, Clock, Heart, MessageCircle, MoreVertical, Trash2 } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { useState } from 'react';
 import { DialogNoCloseButton } from "@/components/dialog";
 import {
   DropdownMenu,
@@ -8,135 +12,63 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { useLikePost } from "@/hooks/useLikePost";
+import { getAvatarUrl } from "@/lib/avatar";
+import { formatCount, formatDate } from "@/lib/format";
+import { queryKeys } from "@/lib/query-keys";
 import { renderContentWithMentions } from "@/lib/render-mentions";
-import { settingsLike } from "@/lib/settings.like";
 import { cn } from "@/lib/utils";
-import { deletePost, toggleLike } from '@/services/post.service';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { AlertTriangle, ChevronLeft, ChevronRight, Clock, Heart, MessageCircle, MoreVertical, Trash2 } from "lucide-react";
-import { useRouter } from "next/navigation";
-import { useEffect, useState } from 'react';
+import { deletePost } from '@/services/post.service';
+import { PostDTO } from "@/types/Post.types";
 
 interface PostProps {
-  id: string;
-  username: string;
-  authorId: string;
-  avatar?: string;
-  createdAt: string;
-  title: string;
-  content: string;
-  images?: string[];
-  likes: number;
-  isLiked: boolean;
-  comments: number;
+  post: PostDTO;
+  /** Clicar no card abre o post (desligado na própria página do post). */
   clickable?: boolean;
+  /** Data por extenso em vez de "Há 2 horas". */
+  fullDate?: boolean;
 }
 
-export default function Post({
-  id,
-  username,
-  authorId,
-  avatar,
-  createdAt,
-  title,
-  content,
-  images,
-  likes,
-  isLiked,
-  comments,
-  clickable = true,
-}: PostProps) {
+const TRENDING_LIKES = 15;
+
+export default function Post({ post, clickable = true, fullDate = false }: PostProps) {
   const router = useRouter();
-  const currentUser = useCurrentUser();
-  const [localIsLiked, setLocalIsLiked] = useState(isLiked);
-  const [localLikesCount, setLocalLikesCount] = useState(likes);
+  const queryClient = useQueryClient();
+  const { data: currentUser } = useCurrentUser();
+  const like = useLikePost(post.id);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
-  const queryClient = useQueryClient();
 
-  const isOwner = currentUser?.id === authorId;
-
-  useEffect(() => {
-    setLocalIsLiked(isLiked);
-    setLocalLikesCount(likes);
-  }, [isLiked, likes]);
-
-  const likeMutation = useMutation({
-    mutationFn: () => toggleLike(id),
-    onMutate: async () => {
-      setLocalIsLiked(!localIsLiked);
-      setLocalLikesCount(localIsLiked ? localLikesCount - 1 : localLikesCount + 1);
-    },
-    onSuccess: (data) => {
-      setLocalIsLiked(data.isLiked);
-      setLocalLikesCount(data.likesCount);
-      queryClient.invalidateQueries({ queryKey: ['posts'] });
-      queryClient.invalidateQueries({ queryKey: ['myPosts'] });
-      queryClient.invalidateQueries({ queryKey: ['post', id] });
-    },
-    onError: () => {
-      setLocalIsLiked(!localIsLiked);
-      setLocalLikesCount(localIsLiked ? localLikesCount + 1 : localLikesCount - 1);
-    },
-  });
+  const { id, author, title, content, images = [], likes, isLiked, comments } = post;
+  const isOwner = currentUser?.id === author.id;
 
   const deleteMutation = useMutation({
     mutationFn: () => deletePost(id),
     onSuccess: () => {
       setShowDeleteModal(false);
-      queryClient.invalidateQueries({ queryKey: ['posts'] });
-      queryClient.invalidateQueries({ queryKey: ['myPosts'] });
+      // Atualiza feed, perfil, página do usuário e o total de posts.
+      queryClient.invalidateQueries({ queryKey: queryKeys.posts.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.me });
+      if (!clickable) router.push("/home");
     },
   });
 
-  const handleLike = (e: React.MouseEvent) => {
+  const stop = (handler: () => void) => (e: React.MouseEvent) => {
     e.stopPropagation();
-    likeMutation.mutate();
-  };
-
-  const handleDeleteClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setShowDeleteModal(true);
-  };
-
-  const handleConfirmDelete = () => deleteMutation.mutate();
-  const handleCancelDelete = () => setShowDeleteModal(false);
-
-  const handlePostClick = () => {
-    if (clickable) router.push(`/post/${id}`);
-  };
-
-  const getAvatarUrl = () => {
-    if (avatar) {
-      if (avatar.startsWith('http')) return avatar;
-      return `http://localhost:3000${avatar}`;
-    }
-    return '/profilePicture.png';
-  };
-
-  const handlePrevImage = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setCurrentImageIndex(prev => prev - 1);
-  };
-
-  const handleNextImage = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setCurrentImageIndex(prev => prev + 1);
+    handler();
   };
 
   return (
     <>
       <DialogNoCloseButton
         open={showDeleteModal}
-        onClose={handleCancelDelete}
+        onClose={() => setShowDeleteModal(false)}
         title="Deletar post?"
         description="Esta ação não pode ser desfeita. O post será permanentemente removido."
         icon={<AlertTriangle className="h-6 w-6 text-destructive" />}
-        textButton={deleteMutation.isPending ? "Deletando..." : "Deletar"}
-        onSubmit={handleConfirmDelete}
+        textButton="Deletar"
+        onSubmit={() => deleteMutation.mutate()}
         disabled={deleteMutation.isPending}
-        showCancelButton={true}
-        showSubmitButton={true}
       />
 
       <article
@@ -146,26 +78,29 @@ export default function Post({
           "hover:shadow-lg hover:border-primary/30 hover:bg-accent/50",
           clickable && "cursor-pointer hover:-translate-y-1"
         )}
-        onClick={handlePostClick}
+        onClick={() => clickable && router.push(`/post/${id}`)}
       >
         <header className="flex items-start justify-between mb-5">
           <div className="flex items-center gap-3">
+            {/* eslint-disable-next-line @next/next/no-img-element -- avatar do Cloudinary, já otimizado */}
             <img
-              src={getAvatarUrl()}
-              alt={username}
+              src={getAvatarUrl(author.avatar)}
+              alt={author.name}
               className="rounded-full object-cover ring-2 ring-background w-10 h-10"
             />
             <div className="flex flex-col gap-1">
-              <span className="font-bold text-sm flex items-center gap-2">{username}</span>
+              <span className="font-bold text-sm flex items-center gap-2">{author.name}</span>
               <div className="flex items-center gap-1.5 text-muted-foreground">
                 <Clock className="h-3 w-3" />
-                <span className="text-xs">{createdAt}</span>
+                <span className="text-xs">
+                  {fullDate ? new Date(post.createdAt).toLocaleDateString("pt-BR") : formatDate(post.createdAt)}
+                </span>
               </div>
             </div>
           </div>
 
           <div className="flex items-center gap-2">
-            {localLikesCount > 15 && (
+            {likes > TRENDING_LIKES && (
               <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-primary/10 border border-primary/20">
                 <div className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
                 <span className="text-xs font-medium text-primary">Em alta</span>
@@ -174,13 +109,16 @@ export default function Post({
             {isOwner && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                  <button className="p-2 hover:bg-accent rounded-lg transition-colors cursor-pointer">
+                  <button
+                    aria-label="Opções do post"
+                    className="p-2 hover:bg-accent rounded-lg transition-colors cursor-pointer"
+                  >
                     <MoreVertical className="h-4 w-4" />
                   </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
                   <DropdownMenuItem
-                    onClick={handleDeleteClick}
+                    onClick={stop(() => setShowDeleteModal(true))}
                     className="text-destructive focus:text-destructive cursor-pointer"
                   >
                     <Trash2 className="h-4 w-4 mr-2" />
@@ -198,13 +136,16 @@ export default function Post({
             {renderContentWithMentions(content)}
           </p>
 
-          {images && images.length > 0 && (
+          {images.length > 0 && (
             <div className="mt-4 relative rounded-xl overflow-hidden border border-border h-64">
+              {/* eslint-disable-next-line @next/next/no-img-element -- fundo desfocado */}
               <img
                 src={images[currentImageIndex]}
-                alt={`Imagem ${currentImageIndex + 1}`}
+                alt=""
+                aria-hidden
                 className="absolute inset-0 w-full h-full object-cover blur-xl scale-110 opacity-80"
               />
+              {/* eslint-disable-next-line @next/next/no-img-element -- imagem do Cloudinary */}
               <img
                 src={images[currentImageIndex]}
                 alt={`Imagem ${currentImageIndex + 1}`}
@@ -214,7 +155,8 @@ export default function Post({
                 <>
                   {currentImageIndex > 0 && (
                     <button
-                      onClick={handlePrevImage}
+                      aria-label="Imagem anterior"
+                      onClick={stop(() => setCurrentImageIndex((i) => i - 1))}
                       className="absolute left-2 top-1/2 -translate-y-1/2 p-1.5 bg-black/50 rounded-full hover:bg-black/70 transition-colors cursor-pointer"
                     >
                       <ChevronLeft className="w-4 h-4 text-white" />
@@ -222,7 +164,8 @@ export default function Post({
                   )}
                   {currentImageIndex < images.length - 1 && (
                     <button
-                      onClick={handleNextImage}
+                      aria-label="Próxima imagem"
+                      onClick={stop(() => setCurrentImageIndex((i) => i + 1))}
                       className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 bg-black/50 rounded-full hover:bg-black/70 transition-colors cursor-pointer"
                     >
                       <ChevronRight className="w-4 h-4 text-white" />
@@ -244,20 +187,23 @@ export default function Post({
 
         <footer className="flex items-center gap-3">
           <button
-            onClick={handleLike}
-            disabled={likeMutation.isPending}
+            onClick={stop(() => like.mutate())}
+            disabled={like.isPending}
+            aria-label={isLiked ? "Descurtir" : "Curtir"}
+            aria-pressed={isLiked}
             className={cn(
               "flex items-center gap-2 px-5 py-2.5 rounded-xl font-medium text-sm",
               "transition-all duration-300 cursor-pointer hover:scale-110 h-full",
-              localIsLiked ? "bg-red-500/15 text-red-500" : "bg-secondary hover:bg-secondary/80"
+              isLiked ? "bg-red-500/15 text-red-500" : "bg-secondary hover:bg-secondary/80"
             )}
           >
-            <Heart className={cn("h-4 w-4 transition-all duration-300", localIsLiked && "fill-red-500 scale-110")} />
-            <span>{settingsLike(localLikesCount)}</span>
+            <Heart className={cn("h-4 w-4 transition-all duration-300", isLiked && "fill-red-500 scale-110")} />
+            <span>{formatCount(likes)}</span>
           </button>
 
           <button
-            onClick={(e) => { e.stopPropagation(); router.push(`/post/${id}`); }}
+            onClick={stop(() => router.push(`/post/${id}`))}
+            aria-label="Comentários"
             className="flex items-center hover:scale-110 gap-2 px-5 py-2.5 rounded-xl font-medium text-sm bg-secondary hover:bg-secondary/80 transition-all duration-300 cursor-pointer"
           >
             <MessageCircle className="h-4 w-4" />

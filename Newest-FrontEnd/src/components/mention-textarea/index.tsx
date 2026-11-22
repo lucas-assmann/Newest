@@ -2,7 +2,8 @@
 
 import { useDebounce } from "@/hooks/use-debounce"
 import { searchUsers } from "@/services/user.service"
-import { User } from "@/types/user.types"
+import { queryKeys } from "@/lib/query-keys"
+import type { SearchedUser } from "@/types/user.types"
 import { useQuery } from "@tanstack/react-query"
 import { UserIcon } from "lucide-react"
 import { useRef, useState } from "react"
@@ -23,7 +24,7 @@ export function MentionTextarea({ value, onChange, placeholder, className }: Men
   const debouncedQuery = useDebounce(mentionQuery, 300)
 
   const { data: users = [] } = useQuery({
-    queryKey: ['mentionSearch', debouncedQuery],
+    queryKey: queryKeys.searchUsers(debouncedQuery),
     queryFn: () => searchUsers(debouncedQuery),
     enabled: debouncedQuery.length > 0,
   })
@@ -71,7 +72,7 @@ export function MentionTextarea({ value, onChange, placeholder, className }: Men
 
       {showDropdown && suggestions.length > 0 && (
         <div className="absolute z-50 left-0 right-0 bg-card border border-border rounded-lg shadow-lg overflow-hidden">
-          {suggestions.map((user: User) => (
+          {suggestions.map((user: SearchedUser) => (
             <button
               key={user.id}
               type="button"

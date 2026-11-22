@@ -1,5 +1,5 @@
 import { Metadata } from "next";
-import SettingsClient from "./pageCliente";
+import SettingsClient from "./pageClient";
 
 export const metadata: Metadata = {
   title: "Configurações",

@@ -15,7 +15,8 @@ import { Textarea } from "../ui/textarea"
 
 import { useAuth } from "@/hooks/useAuth"
 
-import { useCloudinaryUpload } from "@/hooks/use-cloudinary"
+import { useImageUpload, validateImageFile } from "@/hooks/useImageUpload"
+import { getErrorMessage } from "@/lib/errors"
 import { RegisterFormData, RegisterSchema } from "@/schemas/register.schemas"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { Camera, Check, CircleX, Eye, EyeClosed, X } from "lucide-react"
@@ -23,7 +24,7 @@ import { useRouter } from "next/navigation"
 import { useForm } from "react-hook-form"
 import { DialogNoCloseButton } from "../dialog"
 
-export function CardDemo() {
+export function RegisterCard() {
   const { register: registerUser } = useAuth();
   const [avatar, setAvatar] = useState<File | null>(null);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
@@ -31,7 +32,7 @@ export function CardDemo() {
   const [openSucess, setOpenSucess] = useState(false);
   const [openError, setOpenError] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
-  const { uploadImage, uploading } = useCloudinaryUpload();
+  const { uploadImage, uploading } = useImageUpload();
   const router = useRouter();
 
   const [showPassword, setShowPassword] = useState(false)
@@ -49,14 +50,9 @@ export function CardDemo() {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (!file.type.startsWith('image/')) {
-      setErrorMessage('Por favor, selecione uma imagem válida');
-      setOpenError(true);
-      return;
-    }
-
-    if (file.size > 5 * 1024 * 1024) {
-      setErrorMessage('A imagem deve ter no máximo 5MB');
+    const invalid = validateImageFile(file);
+    if (invalid) {
+      setErrorMessage(invalid);
       setOpenError(true);
       return;
     }
@@ -84,9 +80,8 @@ export function CardDemo() {
 
       await registerUser(data.name, data.email, data.password, data.bio, avatarUrl);
       setOpenSucess(true);
-    } catch (error: any) {
-      console.log(error);
-      setErrorMessage(error?.response?.data?.message || 'Erro ao criar conta');
+    } catch (error) {
+      setErrorMessage(getErrorMessage(error, error instanceof Error ? error.message : 'Erro ao criar conta'));
       setOpenError(true);
     }
   };

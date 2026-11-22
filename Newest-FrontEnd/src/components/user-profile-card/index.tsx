@@ -1,22 +1,17 @@
 "use client"
 
 import { Skeleton } from "@/components/ui/skeleton";
-import { formatDateLong } from "@/lib/settings.date";
-import { postSettings } from "@/lib/settings.post";
+import { formatDateLong, formatPostCount } from "@/lib/format";
+import type { PublicUser } from "@/types/user.types";
 import { Calendar, FileText, User } from "lucide-react";
 import { SidebarTrigger } from "../ui/sidebar";
 
 interface UserProfileCardProps {
-  user: any;
+  user?: PublicUser;
   isLoading: boolean;
 }
 
 export default function UserProfileCard({ user, isLoading }: UserProfileCardProps) {
-  const getAvatarUrl = () => {
-    if (user?.avatar) return user.avatar;
-    return null;
-  };
-
   if (isLoading) {
     return (
       <div className="p-6 border-b border-border">
@@ -35,7 +30,7 @@ export default function UserProfileCard({ user, isLoading }: UserProfileCardProp
 
   if (!user) return null;
 
-  const avatarUrl = getAvatarUrl();
+  const avatarUrl = user.avatar;
 
   return (
     <div className="relative">
@@ -80,7 +75,7 @@ export default function UserProfileCard({ user, isLoading }: UserProfileCardProp
 
             <div className="flex items-center gap-1.5 text-muted-foreground">
               <FileText className="h-4 w-4" />
-              <span>{postSettings(user.totalPosts ?? 0)}</span>
+              <span>{formatPostCount(user.totalPosts ?? 0)}</span>
             </div>
           </div>
         </div>

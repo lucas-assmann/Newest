@@ -2,7 +2,7 @@
 
 import { createContext, ReactNode, useState } from "react";
 import { api } from "../services/api";
-import { getAcessToken, logout as removeAccessToken } from "../services/auth.service";
+import { getAccessToken, logout as removeAccessToken, saveAccessToken } from "../services/auth.service";
 
 interface AuthContextData {
   isAuthenticated: boolean;
@@ -11,25 +11,16 @@ interface AuthContextData {
   register: (name: string, email: string, password: string, bio?: string, avatarUrl?: string | null) => Promise<void>;
 }
 
-export const AuthContext = createContext<AuthContextData>(
-  {} as AuthContextData
-);
+export const AuthContext = createContext<AuthContextData>({} as AuthContextData);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
-    const token = getAcessToken();
-    return !!token;
-  });
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => !!getAccessToken());
 
   async function signIn(email: string, password: string) {
-    const response = await api.post("auth/login", { email, password });
-
-    const { accessToken } = response.data;
-
-    localStorage.setItem("token", accessToken);
-
+    const { data } = await api.post<{ accessToken: string }>("auth/login", { email, password });
+    saveAccessToken(data.accessToken);
     setIsAuthenticated(true);
-
+    // Recarrega a página para começar com o cache limpo.
     window.location.href = "/home";
   }
 
@@ -43,11 +34,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
   }
 
-  async function logout() {
+  function logout() {
     removeAccessToken();
-
     setIsAuthenticated(false);
-
     window.location.href = "/login";
   }
 

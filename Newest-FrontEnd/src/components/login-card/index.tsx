@@ -40,9 +40,8 @@ export function LoginCard() {
         email,
         password,
       );
-    } catch (error) {
+    } catch {
       setOpen(true);
-      console.log(error);
     }
   }
 

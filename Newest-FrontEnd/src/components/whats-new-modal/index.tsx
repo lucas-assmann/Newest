@@ -1,30 +1,28 @@
 "use client"
 
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Image, MessageSquare, ShieldCheck } from "lucide-react"
+import { ImageIcon, MessageSquare, ShieldCheck } from "lucide-react"
 import { useRouter } from "next/navigation"
-import { useEffect, useState } from "react"
+import { useState } from "react"
+import { useIsClient } from "@/hooks/useIsClient"
 import { Button } from "../ui/button"
 
 const STORAGE_KEY = "whats-new-seen-v1"
 
 export function WhatsNewModal() {
-  const [open, setOpen] = useState(false)
   const router = useRouter()
-
-  useEffect(() => {
-    const seen = localStorage.getItem(STORAGE_KEY)
-    if (!seen) setOpen(true)
-  }, [])
+  const isClient = useIsClient()
+  const [dismissed, setDismissed] = useState(false)
+  // Abre uma vez por navegador (o localStorage só existe no cliente).
+  const open = isClient && !dismissed && !localStorage.getItem(STORAGE_KEY)
 
   function handleClose() {
     localStorage.setItem(STORAGE_KEY, "true")
-    setOpen(false)
+    setDismissed(true)
   }
 
   function handleSeeAll() {
-    localStorage.setItem(STORAGE_KEY, "true")
-    setOpen(false)
+    handleClose()
     router.push("/update")
   }
 
@@ -58,7 +56,7 @@ export function WhatsNewModal() {
 
           <div className="flex items-start gap-3">
             <div className="p-2 bg-primary/10 rounded-lg shrink-0">
-              <Image className="w-5 h-5 text-primary" />
+              <ImageIcon className="w-5 h-5 text-primary" />
             </div>
             <div>
               <p className="font-semibold text-sm">Até 3 imagens por post</p>
