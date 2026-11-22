@@ -4,7 +4,8 @@ import Post from "@/components/post";
 import UserProfileCard from "@/components/user-profile-card";
 import { AuthGuard } from "@/guard/AuthGuard";
 import { formatDate } from "@/lib/settings.date";
-import { getPostByUserId, getUserById } from "@/services/user.service";
+import { getUserPosts } from "@/services/post.service";
+import { getUserById } from "@/services/user.service";
 import { PostDTO } from "@/types/Post.types";
 import { useQuery } from "@tanstack/react-query";
 import { AlertCircle, FileText, Loader2 } from "lucide-react";
@@ -31,7 +32,7 @@ export default function UserPage() {
     error: errorPosts
   } = useQuery({
     queryKey: ['userPosts', userId],
-    queryFn: () => getPostByUserId(userId),
+    queryFn: () => getUserPosts(userId),
     enabled: !!userId,
   });
 

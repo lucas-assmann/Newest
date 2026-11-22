@@ -45,11 +45,6 @@ export const getUserById = async (id: string) => {
   return data;
 };
 
-export const getPostByUserId = async (id: string) => {
-  const { data } = await api.get(`/user/${id}/posts`);
-  return data;
-};
-
 export const uploadAvatar = async (avatarUrl: string): Promise<void> => {
   await api.patch("/user/me", { avatar: avatarUrl });
 };
