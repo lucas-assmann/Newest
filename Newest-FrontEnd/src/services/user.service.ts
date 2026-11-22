@@ -1,13 +1,8 @@
-import { User } from "@/types/user.types";
+import { PublicUser, SearchedUser, User } from "@/types/user.types";
 import { api } from "./api";
 
 export const getMyProfile = async (): Promise<User> => {
-  const { data } = await api.get("/user/me");
-  return data;
-};
-
-export const getMyInformations = async (): Promise<User> => {
-  const { data } = await api.get("/user/me");
+  const { data } = await api.get<User>("/user/me");
   return data;
 };
 
@@ -21,7 +16,7 @@ export const updateMyProfile = async ({
   bio?: string;
   email?: string;
 }) => {
-  const { data: response } = await api.patch("/user/me", { name, bio, email });
+  const { data: response } = await api.patch<User>("/user/me", { name, bio, email });
   return response;
 };
 
@@ -33,15 +28,15 @@ export const changeMyPassword = async (data: {
   return response;
 };
 
-export const searchUsers = async (query: string) => {
-  const { data } = await api.get("/user/search", {
+export const searchUsers = async (query: string): Promise<SearchedUser[]> => {
+  const { data } = await api.get<SearchedUser[]>("/user/search", {
     params: { q: query },
   });
   return data;
 };
 
-export const getUserById = async (id: string) => {
-  const { data } = await api.get(`/user/${id}`);
+export const getUserById = async (id: string): Promise<PublicUser> => {
+  const { data } = await api.get<PublicUser>(`/user/${id}`);
   return data;
 };
 

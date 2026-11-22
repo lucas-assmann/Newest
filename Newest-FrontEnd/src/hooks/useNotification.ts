@@ -1,64 +1,52 @@
-import { getNotifications, getUnreadCount, markAllAsRead, NotificationDTO } from "@/services/notification.service";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef } from "react";
 import { toast } from "sonner";
+import { notificationText } from "@/lib/notifications";
+import { queryKeys } from "@/lib/query-keys";
+import { getNotifications, getUnreadCount, markAllAsRead } from "@/services/notification.service";
 
 export function useNotifications() {
   const queryClient = useQueryClient();
   const pathname = usePathname();
-  const prevIdsRef = useRef<Set<string>>(new Set());
+  const seenIds = useRef<Set<string> | null>(null);
 
   const { data: notifications = [] } = useQuery({
-    queryKey: ["notifications"],
+    queryKey: queryKeys.notifications.list,
     queryFn: getNotifications,
     refetchInterval: 15000,
   });
 
   const { data: unreadCount = 0 } = useQuery({
-    queryKey: ["notifications-unread"],
+    queryKey: queryKeys.notifications.unread,
     queryFn: getUnreadCount,
     refetchInterval: 15000,
   });
 
   const { mutate: readAll } = useMutation({
     mutationFn: markAllAsRead,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["notifications"] });
-      queryClient.invalidateQueries({ queryKey: ["notifications-unread"] });
-    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.notifications.all }),
   });
 
+  // Mostra um aviso para cada notificação nova (menos na própria tela de notificações).
   useEffect(() => {
     if (notifications.length === 0) return;
 
-    if (prevIdsRef.current.size === 0) {
-      notifications.forEach((n: NotificationDTO) => prevIdsRef.current.add(n.id));
+    if (seenIds.current === null) {
+      seenIds.current = new Set(notifications.map((n) => n.id));
       return;
     }
 
-    const newNotifications = notifications.filter(
-      (n: NotificationDTO) => !prevIdsRef.current.has(n.id)
-    );
-
-    if (newNotifications.length > 0 && pathname !== "/notification") {
-      newNotifications.forEach((n: NotificationDTO) => {
-        toast(
-          n.type === "like"
-            ? `${n.actor.name} curtiu seu post`
-            : `${n.actor.name} comentou no seu post`,
-          {
-            duration: 5000,
-            action: {
-              label: "Ver",
-              onClick: () => window.location.href = "/notification",
-            },
-          }
-        );
-      });
+    const fresh = notifications.filter((n) => !seenIds.current!.has(n.id));
+    if (pathname !== "/notification") {
+      fresh.forEach((n) =>
+        toast(`${n.actor.name} ${notificationText(n.type)}`, {
+          duration: 5000,
+          action: { label: "Ver", onClick: () => (window.location.href = "/notification") },
+        }),
+      );
     }
-
-    notifications.forEach((n: NotificationDTO) => prevIdsRef.current.add(n.id));
+    fresh.forEach((n) => seenIds.current!.add(n.id));
   }, [notifications, pathname]);
 
   return { notifications, unreadCount, readAll };

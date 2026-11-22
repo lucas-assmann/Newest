@@ -1,6 +1,6 @@
 import axios, { AxiosError } from "axios";
 import { redirectToLogin } from "@/lib/navigation";
-import { getAcessToken, logout } from "./auth.service";
+import { getAccessToken, logout } from "./auth.service";
 
 export const api = axios.create({
   baseURL: process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000",
@@ -8,7 +8,7 @@ export const api = axios.create({
 
 // Lê o token a cada requisição (antes ficava fixo no momento em que o módulo carregava).
 api.interceptors.request.use((config) => {
-  const token = getAcessToken();
+  const token = getAccessToken();
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
@@ -21,7 +21,7 @@ api.interceptors.response.use(
   (response) => response,
   (error: AxiosError) => {
     const isLoginRequest = error.config?.url?.includes("auth/login");
-    if (error.response?.status === 401 && !isLoginRequest && getAcessToken()) {
+    if (error.response?.status === 401 && !isLoginRequest && getAccessToken()) {
       logout();
       redirectToLogin();
     }

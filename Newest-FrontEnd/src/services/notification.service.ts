@@ -1,8 +1,10 @@
 import { api } from "./api";
 
+export type NotificationType = "like" | "comment" | "mention";
+
 export interface NotificationDTO {
   id: string;
-  type: "like" | "comment";
+  type: NotificationType;
   read: boolean;
   createdAt: string;
   actor: {

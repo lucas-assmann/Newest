@@ -3,7 +3,8 @@ export interface CommentDTO {
   content: string;
   postId: string;
   authorId: string;
-  createdAt: Date;
+  /** Vem da API como texto ISO. */
+  createdAt: string;
   author: {
     id: string;
     name: string;

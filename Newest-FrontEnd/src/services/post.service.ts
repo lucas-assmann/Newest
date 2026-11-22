@@ -1,37 +1,37 @@
-import { PostDTO } from "@/types/Post.types";
+import { PostDTO, ToggleLikeResponse } from "@/types/Post.types";
 import { api } from "./api";
 
 export async function getPosts(): Promise<PostDTO[]> {
-  const response = await api.get<PostDTO[]>("/posts");
-  return response.data;
+  const { data } = await api.get<PostDTO[]>("/posts");
+  return data;
 }
 
-export async function getMyPost(): Promise<PostDTO[]> {
-  const response = await api.get<PostDTO[]>("/posts/me");
-  return response.data;
+export async function getMyPosts(): Promise<PostDTO[]> {
+  const { data } = await api.get<PostDTO[]>("/posts/me");
+  return data;
 }
 
 export const createPost = async (postData: {
-  title?: string;
+  title: string;
   content: string;
-  images?: string[];
-}) => {
-  const { data } = await api.post("/posts", postData);
+  images: string[];
+}): Promise<PostDTO> => {
+  const { data } = await api.post<PostDTO>("/posts", postData);
   return data;
 };
 
-export const toggleLike = async (postId: string) => {
-  const { data } = await api.patch(`/posts/${postId}/like`);
+export const toggleLike = async (postId: string): Promise<ToggleLikeResponse> => {
+  const { data } = await api.patch<ToggleLikeResponse>(`/posts/${postId}/like`);
   return data;
 };
 
-export const getPostById = async (postId: string) => {
-  const { data } = await api.get(`/posts/${postId}`);
+export const getPostById = async (postId: string): Promise<PostDTO> => {
+  const { data } = await api.get<PostDTO>(`/posts/${postId}`);
   return data;
 };
 
-export const getUserPosts = async (userId: string) => {
-  const { data } = await api.get(`/posts/user/${userId}`);
+export const getUserPosts = async (userId: string): Promise<PostDTO[]> => {
+  const { data } = await api.get<PostDTO[]>(`/posts/user/${userId}`);
   return data;
 };
 

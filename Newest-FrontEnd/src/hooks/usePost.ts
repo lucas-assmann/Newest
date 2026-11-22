@@ -1,14 +1,10 @@
-import { getPosts } from "@/services/post.service";
-import { PostDTO } from "@/types/Post.types";
 import { useQuery } from "@tanstack/react-query";
-import { useAuth } from "./useAuth";
+import { queryKeys } from "@/lib/query-keys";
+import { getPosts } from "@/services/post.service";
 
 export function usePosts() {
-  const { isAuthenticated } = useAuth();
-
-  return useQuery<PostDTO[]>({
-    queryKey: ["posts"],
+  return useQuery({
+    queryKey: queryKeys.posts.feed,
     queryFn: getPosts,
-    enabled: isAuthenticated,
   });
 }
