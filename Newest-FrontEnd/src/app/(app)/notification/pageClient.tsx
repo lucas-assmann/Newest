@@ -11,9 +11,9 @@ import { notificationText } from "@/lib/notifications"
 import type { NotificationType } from "@/services/notification.service"
 
 const ICONS: Record<NotificationType, { icon: typeof Heart; bg: string }> = {
-  like: { icon: Heart, bg: "bg-red-500" },
-  comment: { icon: MessageCircle, bg: "bg-blue-500" },
-  mention: { icon: AtSign, bg: "bg-purple-500" },
+  LIKE: { icon: Heart, bg: "bg-red-500" },
+  COMMENT: { icon: MessageCircle, bg: "bg-blue-500" },
+  MENTION: { icon: AtSign, bg: "bg-purple-500" },
 }
 
 export default function NotificationClient() {
@@ -55,7 +55,7 @@ export default function NotificationClient() {
         )}
 
         {notifications.map((notification) => {
-          const { icon: Icon, bg } = ICONS[notification.type] ?? ICONS.comment;
+          const { icon: Icon, bg } = ICONS[notification.type] ?? ICONS.COMMENT;
           return (
             <div
               key={notification.id}

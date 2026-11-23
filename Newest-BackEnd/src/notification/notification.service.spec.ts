@@ -1,3 +1,4 @@
+import { NotificationType } from '@prisma/client';
 import { createPrismaMock, PrismaMock } from 'src/test-utils/prisma-mock';
 import { NotificationService, extractMentions } from './notification.service';
 
@@ -38,8 +39,8 @@ describe('NotificationService', () => {
       });
       expect(prisma.notification.createMany).toHaveBeenCalledWith({
         data: [
-          { userId: 'ana', actorId: 'eu', type: 'mention', postId: 'p1' },
-          { userId: 'bia', actorId: 'eu', type: 'mention', postId: 'p1' },
+          { userId: 'ana', actorId: 'eu', type: 'MENTION', postId: 'p1' },
+          { userId: 'bia', actorId: 'eu', type: 'MENTION', postId: 'p1' },
         ],
       });
     });
@@ -68,5 +69,15 @@ describe('NotificationService', () => {
     expect(prisma.notification.count).toHaveBeenCalledWith({
       where: { userId: 'u1', read: false, NOT: { actorId: 'u1' } },
     });
+  });
+});
+
+describe('NotificationType', () => {
+  it('tem só os três tipos que o front conhece (contrato com a API)', () => {
+    expect(Object.values(NotificationType)).toEqual([
+      'LIKE',
+      'COMMENT',
+      'MENTION',
+    ]);
   });
 });

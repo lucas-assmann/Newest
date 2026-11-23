@@ -68,8 +68,8 @@ describe("format", () => {
 
 describe("notificationText", () => {
   it("tem texto certo para cada tipo — inclusive menção (antes saía 'comentou')", () => {
-    expect(notificationText("like")).toBe("curtiu seu post");
-    expect(notificationText("comment")).toBe("comentou no seu post");
-    expect(notificationText("mention")).toBe("mencionou você");
+    expect(notificationText("LIKE")).toBe("curtiu seu post");
+    expect(notificationText("COMMENT")).toBe("comentou no seu post");
+    expect(notificationText("MENTION")).toBe("mencionou você");
   });
 });

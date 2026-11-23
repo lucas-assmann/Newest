@@ -1,3 +1,4 @@
+import { NotificationType } from '@prisma/client';
 import {
   ForbiddenException,
   Injectable,
@@ -43,7 +44,7 @@ export class CommentService {
         data: {
           userId: post.authorId,
           actorId: userId,
-          type: 'comment',
+          type: NotificationType.COMMENT,
           postId,
         },
       });

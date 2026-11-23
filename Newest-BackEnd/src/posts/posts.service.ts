@@ -7,7 +7,7 @@ import {
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Prisma } from '@prisma/client';
+import { NotificationType, Prisma } from '@prisma/client';
 import {
   newestFirst,
   pageArgs,
@@ -133,7 +133,7 @@ export class PostsService {
         if (existingLike) {
           await tx.like.delete({ where: { id: existingLike.id } });
           await tx.notification.deleteMany({
-            where: { actorId: userId, postId, type: 'like' },
+            where: { actorId: userId, postId, type: NotificationType.LIKE },
           });
           const updated = await tx.post.update({
             where: { id: postId },
@@ -154,7 +154,7 @@ export class PostsService {
             data: {
               userId: post.authorId,
               actorId: userId,
-              type: 'like',
+              type: NotificationType.LIKE,
               postId,
             },
           });

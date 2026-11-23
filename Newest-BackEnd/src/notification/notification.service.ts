@@ -1,3 +1,4 @@
+import { NotificationType } from '@prisma/client';
 import { Injectable } from '@nestjs/common';
 import {
   newestFirst,
@@ -32,7 +33,7 @@ export class NotificationService {
       data: mentioned.map((user) => ({
         userId: user.id,
         actorId,
-        type: 'mention',
+        type: NotificationType.MENTION,
         postId,
       })),
     });

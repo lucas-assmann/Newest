@@ -46,7 +46,7 @@ describe('PostsService.toggleLike', () => {
     expect(prisma.notification.create.mock.calls[0][0].data).toMatchObject({
       userId: 'autor',
       actorId: 'u1',
-      type: 'like',
+      type: 'LIKE',
     });
     expect(result).toMatchObject({ isLiked: true, likesCount: 5 });
   });

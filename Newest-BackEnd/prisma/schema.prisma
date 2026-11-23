@@ -7,18 +7,18 @@ datasource db {
 }
 
 model User {
-  id        String    @id @default(uuid())
-  name      String    @unique
-  email     String    @unique
-  password  String
-  avatar    String?
-  createdAt DateTime  @default(now())
-  bio       String?
-  posts     Post[]
-  likes     Like[]
-  comments  Comment[]
-  notifications         Notification[]
-  notificationsAsActor  Notification[] @relation("NotificationActor")
+  id                   String         @id @default(uuid())
+  name                 String         @unique
+  email                String         @unique
+  password             String
+  avatar               String?
+  createdAt            DateTime       @default(now())
+  bio                  String?
+  posts                Post[]
+  likes                Like[]
+  comments             Comment[]
+  notifications        Notification[]
+  notificationsAsActor Notification[] @relation("NotificationActor")
 }
 
 model Like {
@@ -32,16 +32,16 @@ model Like {
 }
 
 model Post {
-  id         String    @id @default(uuid())
-  title      String
-  content    String
-  images     String[]
-  authorId   String
-  createdAt  DateTime  @default(now())
-  likesCount Int       @default(0)
-  comments   Comment[]
-  author     User      @relation(fields: [authorId], references: [id], onDelete: Cascade)
-  likes      Like[]
+  id            String         @id @default(uuid())
+  title         String
+  content       String
+  images        String[]
+  authorId      String
+  createdAt     DateTime       @default(now())
+  likesCount    Int            @default(0)
+  comments      Comment[]
+  author        User           @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  likes         Like[]
   notifications Notification[]
 }
 
@@ -55,15 +55,21 @@ model Comment {
   author    User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
 }
 
+enum NotificationType {
+  LIKE
+  COMMENT
+  MENTION
+}
+
 model Notification {
-  id        String   @id @default(uuid())
+  id        String           @id @default(uuid())
   userId    String
   actorId   String
-  type      String
+  type      NotificationType
   postId    String?
-  read      Boolean  @default(false)
-  createdAt DateTime @default(now())
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  actor     User     @relation("NotificationActor", fields: [actorId], references: [id], onDelete: Cascade)
-  post      Post?    @relation(fields: [postId], references: [id], onDelete: Cascade)
+  read      Boolean          @default(false)
+  createdAt DateTime         @default(now())
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  actor     User             @relation("NotificationActor", fields: [actorId], references: [id], onDelete: Cascade)
+  post      Post?            @relation(fields: [postId], references: [id], onDelete: Cascade)
 }

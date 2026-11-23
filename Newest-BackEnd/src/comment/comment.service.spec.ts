@@ -40,7 +40,7 @@ describe('CommentService', () => {
 
       expect(prisma.notification.create.mock.calls[0][0].data).toMatchObject({
         userId: 'autor',
-        type: 'comment',
+        type: 'COMMENT',
       });
       expect(mentions).toHaveBeenCalledWith(dto.content, 'u1', dto.postId);
     });

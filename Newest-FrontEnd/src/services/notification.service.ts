@@ -2,7 +2,8 @@ import { cursorParams } from "@/lib/pagination";
 import type { Page } from "@/types/Page.types";
 import { api } from "./api";
 
-export type NotificationType = "like" | "comment" | "mention";
+/** Igual ao enum NotificationType do Prisma no back. */
+export type NotificationType = "LIKE" | "COMMENT" | "MENTION";
 
 export interface NotificationDTO {
   id: string;
