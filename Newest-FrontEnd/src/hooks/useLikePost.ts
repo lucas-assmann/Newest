@@ -1,14 +1,28 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { InfiniteData, useMutation, useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/query-keys";
 import { toggleLike } from "@/services/post.service";
+import type { Page } from "@/types/Page.types";
 import { PostDTO } from "@/types/Post.types";
 
-type PostCache = PostDTO | PostDTO[] | undefined;
+/** No cache, um post aparece sozinho (detalhe) ou dentro das páginas de uma lista. */
+type PostCache = PostDTO | InfiniteData<Page<PostDTO>> | undefined;
+
+function isPaged(data: NonNullable<PostCache>): data is InfiniteData<Page<PostDTO>> {
+  return "pages" in data;
+}
 
 /** Aplica uma mudança no post `postId` onde quer que ele esteja no cache. */
 function updatePost(data: PostCache, postId: string, change: (p: PostDTO) => PostDTO): PostCache {
   if (!data) return data;
-  if (Array.isArray(data)) return data.map((p) => (p.id === postId ? change(p) : p));
+  if (isPaged(data)) {
+    return {
+      ...data,
+      pages: data.pages.map((page) => ({
+        ...page,
+        items: page.items.map((p) => (p.id === postId ? change(p) : p)),
+      })),
+    };
+  }
   return data.id === postId ? change(data) : data;
 }
 

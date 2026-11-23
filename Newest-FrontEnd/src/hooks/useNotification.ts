@@ -1,8 +1,9 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { usePathname } from "next/navigation";
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { toast } from "sonner";
 import { notificationText } from "@/lib/notifications";
+import { cursorPagination, pageItems } from "@/lib/pagination";
 import { queryKeys } from "@/lib/query-keys";
 import { getNotifications, getUnreadCount, markAllAsRead } from "@/services/notification.service";
 
@@ -11,11 +12,13 @@ export function useNotifications() {
   const pathname = usePathname();
   const seenIds = useRef<Set<string> | null>(null);
 
-  const { data: notifications = [] } = useQuery({
+  const list = useInfiniteQuery({
     queryKey: queryKeys.notifications.list,
-    queryFn: getNotifications,
+    queryFn: ({ pageParam }) => getNotifications(pageParam),
+    ...cursorPagination,
     refetchInterval: 15000,
   });
+  const notifications = useMemo(() => pageItems(list.data), [list.data]);
 
   const { data: unreadCount = 0 } = useQuery({
     queryKey: queryKeys.notifications.unread,
@@ -49,5 +52,12 @@ export function useNotifications() {
     fresh.forEach((n) => seenIds.current!.add(n.id));
   }, [notifications, pathname]);
 
-  return { notifications, unreadCount, readAll };
+  return {
+    notifications,
+    unreadCount,
+    readAll,
+    hasNextPage: list.hasNextPage,
+    isFetchingNextPage: list.isFetchingNextPage,
+    fetchNextPage: list.fetchNextPage,
+  };
 }

@@ -4,6 +4,7 @@ import { AtSign, Bell, Heart, MessageCircle } from "lucide-react"
 import Image from "next/image"
 import { useEffect } from "react"
 import ArticlePost from "@/components/article-post"
+import { LoadMore } from "@/components/load-more"
 import { useNotifications } from "@/hooks/useNotification"
 import { formatDate } from "@/lib/format"
 import { notificationText } from "@/lib/notifications"
@@ -16,7 +17,8 @@ const ICONS: Record<NotificationType, { icon: typeof Heart; bg: string }> = {
 }
 
 export default function NotificationClient() {
-  const { notifications, unreadCount, readAll } = useNotifications();
+  const { notifications, unreadCount, readAll, hasNextPage, isFetchingNextPage, fetchNextPage } =
+    useNotifications();
 
   // Abrir a tela marca tudo como lido.
   useEffect(() => {
@@ -92,6 +94,12 @@ export default function NotificationClient() {
           );
         })}
       </div>
+
+      <LoadMore
+        hasNextPage={hasNextPage}
+        isFetchingNextPage={isFetchingNextPage}
+        onLoadMore={fetchNextPage}
+      />
     </ArticlePost>
   )
 }

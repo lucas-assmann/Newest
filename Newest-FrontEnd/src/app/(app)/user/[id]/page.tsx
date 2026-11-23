@@ -3,10 +3,12 @@
 import { useQuery } from "@tanstack/react-query";
 import { AlertCircle, FileText, Loader2 } from "lucide-react";
 import { useParams } from "next/navigation";
+import { LoadMore } from "@/components/load-more";
 import Post from "@/components/post";
 import UserProfileCard from "@/components/user-profile-card";
+import { useUserPosts } from "@/hooks/usePost";
+import { pageItems } from "@/lib/pagination";
 import { queryKeys } from "@/lib/query-keys";
-import { getUserPosts } from "@/services/post.service";
 import { getUserById } from "@/services/user.service";
 
 export default function UserPage() {
@@ -19,15 +21,15 @@ export default function UserPage() {
   });
 
   const {
-    data: posts,
+    data,
     isLoading: isLoadingPosts,
     isError: isErrorPosts,
     error: errorPosts,
-  } = useQuery({
-    queryKey: queryKeys.posts.byUser(userId),
-    queryFn: () => getUserPosts(userId),
-    enabled: !!userId,
-  });
+    hasNextPage,
+    isFetchingNextPage,
+    fetchNextPage,
+  } = useUserPosts(userId);
+  const posts = data ? pageItems(data) : undefined;
 
   const isLoading = isLoadingUser || isLoadingPosts;
   const isError = isErrorUser || isErrorPosts;
@@ -77,11 +79,18 @@ export default function UserPage() {
         {!isLoading && !isError && posts && posts.length > 0 && (
           <>
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold ml-4">Posts ({posts.length})</h2>
+              <h2 className="text-lg font-semibold ml-4">
+                Posts{user ? ` (${user.totalPosts})` : ""}
+              </h2>
             </div>
             <div className="space-y-4">
               {posts.map((post) => <Post key={post.id} post={post} />)}
             </div>
+            <LoadMore
+              hasNextPage={hasNextPage}
+              isFetchingNextPage={isFetchingNextPage}
+              onLoadMore={fetchNextPage}
+            />
           </>
         )}
       </div>

@@ -1,13 +1,16 @@
 'use client';
 
+import { useComments } from '@/hooks/useComments';
 import { getErrorMessage } from '@/lib/errors';
+import { pageItems } from '@/lib/pagination';
 import { queryKeys } from '@/lib/query-keys';
 import { CreateCommentSchema } from '@/schemas/comment.schema';
-import { createComment, getCommentsByPostId } from '@/services/comment.service';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { createComment } from '@/services/comment.service';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Loader2, MessageSquare, Send } from 'lucide-react';
 import { useState } from 'react';
 import Comment from '../comment';
+import { LoadMore } from '../load-more';
 import { Button } from '../ui/button';
 import { Separator } from '../ui/separator';
 import { MentionTextarea } from '../mention-textarea';
@@ -15,17 +18,18 @@ import { MentionTextarea } from '../mention-textarea';
 
 interface CommentSectionProps {
   postId: string;
+  /** Total de comentários do post (a lista carrega aos poucos). */
+  total: number;
 }
 
-export default function CommentSection({ postId }: CommentSectionProps) {
+export default function CommentSection({ postId, total }: CommentSectionProps) {
   const [content, setContent] = useState('');
   const [errors, setErrors] = useState<{ content?: string }>({});
   const queryClient = useQueryClient();
 
-  const { data: comments, isLoading } = useQuery({
-    queryKey: queryKeys.comments(postId),
-    queryFn: () => getCommentsByPostId(postId),
-  });
+  const { data, isLoading, hasNextPage, isFetchingNextPage, fetchNextPage } =
+    useComments(postId);
+  const comments = data ? pageItems(data) : undefined;
 
   const mutation = useMutation({
     mutationFn: createComment,
@@ -64,7 +68,7 @@ export default function CommentSection({ postId }: CommentSectionProps) {
           <MessageSquare className="h-5 w-5 text-primary" />
           <h2 className="text-xl font-bold">Comentários</h2>
           <span className="text-sm text-muted-foreground">
-            ({comments?.length || 0})
+            ({total})
           </span>
         </div>
       </div>
@@ -132,6 +136,12 @@ export default function CommentSection({ postId }: CommentSectionProps) {
             ))}
           </div>
         )}
+
+        <LoadMore
+          hasNextPage={hasNextPage}
+          isFetchingNextPage={isFetchingNextPage}
+          onLoadMore={fetchNextPage}
+        />
       </div>
     </div>
   );

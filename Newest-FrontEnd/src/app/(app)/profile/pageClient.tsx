@@ -1,21 +1,22 @@
 "use client"
 
-import { useQuery } from "@tanstack/react-query";
 import { AlertCircle, FileText, Loader2 } from "lucide-react";
 import { useState } from "react";
+import { LoadMore } from "@/components/load-more";
 import { NewPostDialog } from "@/components/new-post-dialog";
 import Post from "@/components/post";
 import ProfileCard from "@/components/profile-card";
-import { queryKeys } from "@/lib/query-keys";
-import { getMyPosts } from "@/services/post.service";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { useMyPosts } from "@/hooks/usePost";
+import { pageItems } from "@/lib/pagination";
 
 export default function ProfileClient() {
   const [openNewPost, setOpenNewPost] = useState(false);
 
-  const { data: posts, isLoading, isError, error } = useQuery({
-    queryKey: queryKeys.posts.mine,
-    queryFn: getMyPosts,
-  });
+  const { data: me } = useCurrentUser();
+  const { data, isLoading, isError, error, hasNextPage, isFetchingNextPage, fetchNextPage } =
+    useMyPosts();
+  const posts = data ? pageItems(data) : undefined;
 
   return (
     <>
@@ -71,11 +72,18 @@ export default function ProfileClient() {
           {posts && posts.length > 0 && (
             <>
               <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-semibold">Seus posts ({posts.length})</h2>
+                <h2 className="text-lg font-semibold">
+                  Seus posts{me ? ` (${me.totalPosts})` : ""}
+                </h2>
               </div>
               <div className="space-y-4">
                 {posts.map((post) => <Post key={post.id} post={post} />)}
               </div>
+              <LoadMore
+                hasNextPage={hasNextPage}
+                isFetchingNextPage={isFetchingNextPage}
+                onLoadMore={fetchNextPage}
+              />
             </>
           )}
         </div>

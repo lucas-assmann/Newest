@@ -1,3 +1,5 @@
+import { cursorParams } from "@/lib/pagination";
+import type { Page } from "@/types/Page.types";
 import { api } from "./api";
 
 export type NotificationType = "like" | "comment" | "mention";
@@ -18,8 +20,8 @@ export interface NotificationDTO {
   } | null;
 }
 
-export async function getNotifications(): Promise<NotificationDTO[]> {
-  const { data } = await api.get("/notification");
+export async function getNotifications(cursor?: string): Promise<Page<NotificationDTO>> {
+  const { data } = await api.get<Page<NotificationDTO>>("/notification", cursorParams(cursor));
   return data;
 }
 

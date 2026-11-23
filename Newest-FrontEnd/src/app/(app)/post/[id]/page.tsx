@@ -31,7 +31,7 @@ export default function PostPage() {
       {post && (
         <div className="space-y-6 md:p-6">
           <Post post={post} clickable={false} fullDate />
-          <CommentSection postId={post.id} />
+          <CommentSection postId={post.id} total={post.comments} />
         </div>
       )}
     </ArticlePost>

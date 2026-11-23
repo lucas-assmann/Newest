@@ -3,14 +3,17 @@
 import { CirclePlus, Loader2 } from "lucide-react";
 import { useState } from "react";
 import ArticlePost from "@/components/article-post";
+import { LoadMore } from "@/components/load-more";
 import { NewPostDialog } from "@/components/new-post-dialog";
 import Post from "@/components/post";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { usePosts } from "@/hooks/usePost";
+import { pageItems } from "@/lib/pagination";
 
 export default function HomeClient() {
   const [openNewPost, setOpenNewPost] = useState(false);
-  const { data: posts, isLoading } = usePosts();
+  const { data, isLoading, hasNextPage, isFetchingNextPage, fetchNextPage } = usePosts();
+  const posts = pageItems(data);
 
   return (
     <>
@@ -34,7 +37,13 @@ export default function HomeClient() {
           </div>
         )}
 
-        {posts?.map((post) => <Post key={post.id} post={post} />)}
+        {posts.map((post) => <Post key={post.id} post={post} />)}
+
+        <LoadMore
+          hasNextPage={hasNextPage}
+          isFetchingNextPage={isFetchingNextPage}
+          onLoadMore={fetchNextPage}
+        />
       </ArticlePost>
     </>
   );

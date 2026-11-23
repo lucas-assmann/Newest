@@ -1,8 +1,13 @@
-import { api } from "./api";
+import { cursorParams } from "@/lib/pagination";
 import { CommentDTO } from "@/types/Comment.types";
+import type { Page } from "@/types/Page.types";
+import { api } from "./api";
 
-export const getCommentsByPostId = async (postId: string): Promise<CommentDTO[]> => {
-  const { data } = await api.get(`/comment/post/${postId}`);
+export const getCommentsByPostId = async (
+  postId: string,
+  cursor?: string,
+): Promise<Page<CommentDTO>> => {
+  const { data } = await api.get<Page<CommentDTO>>(`/comment/post/${postId}`, cursorParams(cursor));
   return data;
 };
 
