@@ -8,6 +8,8 @@ import {
   CardTitle
 } from "@/components/ui/card"
 import { useAuth } from "@/hooks/useAuth"
+import { getErrorMessage } from "@/lib/errors"
+import { isAxiosError } from "axios"
 import { CircleX, Eye, EyeClosed } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { FormEvent, useEffect, useState } from "react"
@@ -15,6 +17,22 @@ import { DialogNoCloseButton } from "../dialog"
 import { Input } from "../ui/input"
 import { Label } from "../ui/label"
 
+
+const WRONG_CREDENTIALS = {
+  title: "Dados incorretos",
+  description: "Verifique seus dados e tente novamente.",
+};
+
+/** Muitas tentativas (429) não é senha errada: mostra a mensagem do servidor. */
+export function loginErrorFor(error: unknown) {
+  if (isAxiosError(error) && error.response?.status === 429) {
+    return {
+      title: "Muitas tentativas",
+      description: getErrorMessage(error, "Aguarde um minuto e tente de novo."),
+    };
+  }
+  return WRONG_CREDENTIALS;
+}
 
 export function LoginCard() {
 
@@ -24,6 +42,7 @@ export function LoginCard() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [open, setOpen] = useState(false);
+  const [loginError, setLoginError] = useState(WRONG_CREDENTIALS);
   const [showPassword, setShowPassword] = useState(false)
   const [isReady, setIsReady] = useState(false)
 
@@ -40,7 +59,8 @@ export function LoginCard() {
         email,
         password,
       );
-    } catch {
+    } catch (error) {
+      setLoginError(loginErrorFor(error));
       setOpen(true);
     }
   }
@@ -49,8 +69,8 @@ export function LoginCard() {
     <>
       <DialogNoCloseButton
         open={open}
-        title="Dados incorretos"
-        description="Verifique seus dados e tente novamente."
+        title={loginError.title}
+        description={loginError.description}
         icon={<CircleX className="text-red-500" />}
         onClose={() => setOpen(false)}
         showCancelButton={false}

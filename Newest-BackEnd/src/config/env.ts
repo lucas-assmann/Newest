@@ -9,6 +9,9 @@ const envSchema = z.object({
   /** Sem elas, posts com imagem são recusados (a moderação não roda). */
   SIGHTENGINE_USER: z.string().optional(),
   SIGHTENGINE_SECRET: z.string().optional(),
+  /** Limite de tentativas de login e de cadastro por IP, por janela de tempo. */
+  AUTH_RATE_LIMIT: z.coerce.number().int().positive().default(5),
+  AUTH_RATE_TTL_SECONDS: z.coerce.number().int().positive().default(60),
 });
 
 /** Usado pelo ConfigModule: o app nem sobe se faltar variável obrigatória. */

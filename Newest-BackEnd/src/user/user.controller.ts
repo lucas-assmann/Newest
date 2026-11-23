@@ -8,6 +8,7 @@ import {
   Post,
   Query,
 } from '@nestjs/common';
+import { AuthRateLimit } from 'src/auth/auth-rate-limit';
 import type { AuthUser } from 'src/auth/current-user.decorator';
 import { CurrentUser } from 'src/auth/current-user.decorator';
 import { Public } from 'src/auth/public.decorator';
@@ -23,6 +24,7 @@ export class UserController {
   constructor(private readonly userService: UserService) {}
 
   @Public()
+  @AuthRateLimit()
   @Post()
   create(@Body() createUserDto: CreateUserDto) {
     return this.userService.create(createUserDto);
