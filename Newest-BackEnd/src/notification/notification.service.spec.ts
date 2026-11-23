@@ -81,3 +81,37 @@ describe('NotificationType', () => {
     ]);
   });
 });
+
+describe('NotificationService (cobertura)', () => {
+  let prisma: PrismaMock;
+  let service: NotificationService;
+
+  beforeEach(() => {
+    prisma = createPrismaMock();
+    service = new NotificationService(prisma);
+  });
+
+  it('lista não inclui o que a própria pessoa fez', async () => {
+    prisma.notification.findMany.mockResolvedValue([]);
+    await service.findByUserId('eu');
+    expect(prisma.notification.findMany.mock.calls[0][0]!.where).toEqual({
+      userId: 'eu',
+      NOT: { actorId: 'eu' },
+    });
+  });
+
+  it('marcar todas como lidas mexe só nas não lidas da pessoa', async () => {
+    prisma.notification.updateMany.mockResolvedValue({ count: 2 });
+    await expect(service.markAllAsRead('eu')).resolves.toEqual({ count: 2 });
+    expect(prisma.notification.updateMany).toHaveBeenCalledWith({
+      where: { userId: 'eu', read: false },
+      data: { read: true },
+    });
+  });
+
+  it('menção sem ninguém encontrado não cria notificação', async () => {
+    prisma.user.findMany.mockResolvedValue([]);
+    await service.notifyMentions('oi @ninguem', 'eu', 'p1');
+    expect(prisma.notification.createMany).not.toHaveBeenCalled();
+  });
+});

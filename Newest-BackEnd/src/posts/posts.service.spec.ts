@@ -161,3 +161,60 @@ describe('CreatePostSchema', () => {
     ).toBe(false);
   });
 });
+
+describe('PostsService (cobertura)', () => {
+  let prisma: PrismaMock;
+  let service: PostsService;
+
+  beforeEach(() => {
+    prisma = createPrismaMock();
+    const config = { get: () => undefined } as unknown as ConfigService;
+    service = new PostsService(prisma, config, new NotificationService(prisma));
+  });
+
+  const row = {
+    id: 'p1',
+    title: 't',
+    content: 'c',
+    images: [],
+    createdAt: new Date('2026-11-22T00:00:00Z'),
+    likesCount: 2,
+    likes: [{ id: 'l1' }],
+    author: { id: 'u1', name: 'ana', avatar: null },
+    _count: { comments: 5 },
+  };
+
+  it('findOne devolve o post no formato do front', async () => {
+    prisma.post.findUnique.mockResolvedValue(row as any);
+    await expect(service.findOne('p1', 'u2')).resolves.toMatchObject({
+      id: 'p1',
+      likes: 2,
+      comments: 5,
+      isLiked: true,
+    });
+  });
+
+  it('findOne de post inexistente → 404', async () => {
+    prisma.post.findUnique.mockResolvedValue(null);
+    await expect(service.findOne('x', 'u1')).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+  });
+
+  it('o autor apaga o próprio post', async () => {
+    prisma.post.findUnique.mockResolvedValue({ authorId: 'u1' } as any);
+    await service.remove('p1', 'u1');
+    expect(prisma.post.delete).toHaveBeenCalledWith({ where: { id: 'p1' } });
+  });
+
+  it('feed pagina: com cursor começa depois dele', async () => {
+    prisma.post.findMany.mockResolvedValue([row] as any);
+    const page = await service.getAllPosts('u1', { limit: 1, cursor: 'p0' });
+    expect(page.nextCursor).toBeNull();
+    expect(prisma.post.findMany.mock.calls[0][0]).toMatchObject({
+      cursor: { id: 'p0' },
+      skip: 1,
+      take: 2,
+    });
+  });
+});

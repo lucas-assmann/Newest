@@ -75,3 +75,50 @@ describe('CommentService', () => {
     });
   });
 });
+
+describe('CommentService (cobertura)', () => {
+  let prisma: PrismaMock;
+  let service: CommentService;
+
+  beforeEach(() => {
+    prisma = createPrismaMock();
+    service = new CommentService(prisma, new NotificationService(prisma));
+  });
+
+  it('findOne devolve o comentário com o autor', async () => {
+    prisma.comment.findUnique.mockResolvedValue({ id: 'c1' } as any);
+    await expect(service.findOne('c1')).resolves.toEqual({ id: 'c1' });
+    expect(prisma.comment.findUnique.mock.calls[0][0].include).toHaveProperty(
+      'author',
+    );
+  });
+
+  it('findOne de comentário inexistente → 404', async () => {
+    prisma.comment.findUnique.mockResolvedValue(null);
+    await expect(service.findOne('x')).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+  });
+
+  it('o autor apaga o próprio comentário', async () => {
+    prisma.comment.findUnique.mockResolvedValue({ authorId: 'eu' } as any);
+    await service.remove('c1', 'eu');
+    expect(prisma.comment.delete).toHaveBeenCalledWith({ where: { id: 'c1' } });
+  });
+
+  it('findByPostId pagina do mais novo para o mais antigo', async () => {
+    prisma.comment.findMany.mockResolvedValue([
+      { id: 'c3' },
+      { id: 'c2' },
+      { id: 'c1' },
+    ] as any);
+    await expect(service.findByPostId('p1', { limit: 2 })).resolves.toEqual({
+      items: [{ id: 'c3' }, { id: 'c2' }],
+      nextCursor: 'c2',
+    });
+    expect(prisma.comment.findMany.mock.calls[0][0]).toMatchObject({
+      where: { postId: 'p1' },
+      take: 3,
+    });
+  });
+});

@@ -3,6 +3,7 @@ import {
   ConflictException,
   Injectable,
   NotFoundException,
+  UnauthorizedException,
 } from '@nestjs/common';
 import * as bcrypt from 'bcryptjs';
 import { PrismaService } from 'src/prisma/prisma.service';
@@ -68,6 +69,11 @@ export class UserService {
         email: true,
       },
     });
+    // Token válido de uma conta que não existe mais (ex.: foi apagada):
+    // 401 faz o front sair da conta, em vez de mostrar um perfil vazio.
+    if (!user) {
+      throw new UnauthorizedException('Usuário não encontrado');
+    }
     return { ...user, totalPosts };
   }
 
