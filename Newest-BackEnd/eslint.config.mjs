@@ -34,7 +34,7 @@ export default tseslint.config(
   },
   {
     // Nos testes, mocks com `any` e `expect(mock.metodo)` são o padrão do Jest.
-    files: ['**/*.spec.ts', 'src/test-utils/**'],
+    files: ['**/*.spec.ts', '**/*.e2e-spec.ts', 'test/**', 'src/test-utils/**'],
     rules: {
       '@typescript-eslint/no-unsafe-argument': 'off',
       '@typescript-eslint/no-unsafe-assignment': 'off',
