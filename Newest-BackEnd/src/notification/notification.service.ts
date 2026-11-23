@@ -1,4 +1,10 @@
 import { Injectable } from '@nestjs/common';
+import {
+  newestFirst,
+  pageArgs,
+  Pagination,
+  toPage,
+} from 'src/common/pagination';
 import { PrismaService } from 'src/prisma/prisma.service';
 
 /** Nomes citados com @ no texto, sem repetir. */
@@ -32,13 +38,14 @@ export class NotificationService {
     });
   }
 
-  async findByUserId(userId: string) {
-    return this.prisma.notification.findMany({
+  async findByUserId(userId: string, page: Pagination = {}) {
+    const notifications = await this.prisma.notification.findMany({
       where: {
         userId,
         NOT: { actorId: userId },
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy: newestFirst,
+      ...pageArgs(page),
       include: {
         actor: {
           select: {
@@ -55,6 +62,7 @@ export class NotificationService {
         },
       },
     });
+    return toPage(notifications, page);
   }
 
   async markAllAsRead(userId: string) {

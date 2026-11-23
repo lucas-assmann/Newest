@@ -8,6 +8,12 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Prisma } from '@prisma/client';
+import {
+  newestFirst,
+  pageArgs,
+  Pagination,
+  toPage,
+} from 'src/common/pagination';
 import { NotificationService } from 'src/notification/notification.service';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { CreatePostDto } from './dto/create-post.dto';
@@ -167,21 +173,27 @@ export class PostsService {
     }
   }
 
-  async getAllPosts(currentUserId: string) {
+  async getAllPosts(currentUserId: string, page: Pagination = {}) {
     const posts = await this.prisma.post.findMany({
-      orderBy: { createdAt: 'desc' },
+      orderBy: newestFirst,
       select: postSelect(currentUserId),
+      ...pageArgs(page),
     });
-    return posts.map(toPostDto);
+    return toPage(posts.map(toPostDto), page);
   }
 
-  async findByUserId(userId: string, currentUserId: string) {
+  async findByUserId(
+    userId: string,
+    currentUserId: string,
+    page: Pagination = {},
+  ) {
     const posts = await this.prisma.post.findMany({
       where: { authorId: userId },
-      orderBy: { createdAt: 'desc' },
+      orderBy: newestFirst,
       select: postSelect(currentUserId),
+      ...pageArgs(page),
     });
-    return posts.map(toPostDto);
+    return toPage(posts.map(toPostDto), page);
   }
 
   async findOne(postId: string, currentUserId: string) {

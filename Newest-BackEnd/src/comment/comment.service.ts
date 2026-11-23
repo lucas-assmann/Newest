@@ -3,6 +3,12 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import {
+  newestFirst,
+  pageArgs,
+  Pagination,
+  toPage,
+} from 'src/common/pagination';
 import { NotificationService } from 'src/notification/notification.service';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateCommentDto } from './dto/create-comment.dto';
@@ -48,12 +54,14 @@ export class CommentService {
     return comment;
   }
 
-  findByPostId(postId: string) {
-    return this.prisma.comment.findMany({
+  async findByPostId(postId: string, page: Pagination = {}) {
+    const comments = await this.prisma.comment.findMany({
       where: { postId },
-      orderBy: { createdAt: 'desc' },
+      orderBy: newestFirst,
       include: authorSelect,
+      ...pageArgs(page),
     });
+    return toPage(comments, page);
   }
 
   async findOne(id: string) {

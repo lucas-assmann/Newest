@@ -121,4 +121,45 @@ describe('rotas da API', () => {
         .expect(404);
     });
   });
+
+  describe('paginação por cursor', () => {
+    const lists = [
+      ['/posts', () => prisma.post.findMany],
+      ['/posts/me', () => prisma.post.findMany],
+      ['/posts/user/u2', () => prisma.post.findMany],
+      ['/comment/post/p1', () => prisma.comment.findMany],
+      ['/notification', () => prisma.notification.findMany],
+    ] as const;
+
+    it.each(lists)(
+      'GET %s?cursor=&limit= devolve { items, nextCursor }',
+      async (url, findMany) => {
+        const token = await login();
+        findMany().mockClear();
+        findMany().mockResolvedValueOnce([]);
+
+        const res = await request(app.getHttpServer())
+          .get(`${url}?cursor=abc&limit=5`)
+          .set('Authorization', `Bearer ${token}`)
+          .expect(200);
+
+        expect(res.body).toEqual({ items: [], nextCursor: null });
+        expect(findMany()).toHaveBeenCalledWith(
+          expect.objectContaining({
+            take: 6,
+            skip: 1,
+            cursor: { id: 'abc' },
+          }),
+        );
+      },
+    );
+
+    it.each(lists)('GET %s?limit=999 → 400', async (url) => {
+      const token = await login();
+      await request(app.getHttpServer())
+        .get(`${url}?limit=999`)
+        .set('Authorization', `Bearer ${token}`)
+        .expect(400);
+    });
+  });
 });

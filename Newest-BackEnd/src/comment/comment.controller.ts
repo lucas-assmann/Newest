@@ -1,6 +1,15 @@
-import { Body, Controller, Delete, Get, Param, Post } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Post,
+  Query,
+} from '@nestjs/common';
 import type { AuthUser } from 'src/auth/current-user.decorator';
 import { CurrentUser } from 'src/auth/current-user.decorator';
+import { PaginationQueryDto } from 'src/common/pagination';
 import { CommentService } from './comment.service';
 import { CreateCommentDto } from './dto/create-comment.dto';
 
@@ -17,8 +26,11 @@ export class CommentController {
   }
 
   @Get('post/:postId')
-  findByPostId(@Param('postId') postId: string) {
-    return this.commentService.findByPostId(postId);
+  findByPostId(
+    @Param('postId') postId: string,
+    @Query() page: PaginationQueryDto,
+  ) {
+    return this.commentService.findByPostId(postId, page);
   }
 
   @Get(':id')
