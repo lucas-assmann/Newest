@@ -17,6 +17,7 @@ import {
 import { NotificationService } from 'src/notification/notification.service';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { CreatePostDto } from './dto/create-post.dto';
+import { UpdatePostDto } from './dto/update-post.dto';
 import { postSelect, toPostDto } from './post.mapper';
 
 /** Parte da resposta do Sightengine que usamos. */
@@ -230,6 +231,39 @@ export class PostsService {
     );
 
     return toPostDto(post);
+  }
+
+  /** Só o autor edita; marca editedAt e avisa só as menções novas. */
+  async update(id: string, dto: UpdatePostDto, userId: string) {
+    const post = await this.prisma.post.findUnique({
+      where: { id },
+      select: { authorId: true, content: true },
+    });
+    if (!post) {
+      throw new NotFoundException('Post não encontrado');
+    }
+    if (post.authorId !== userId) {
+      throw new ForbiddenException(
+        'Você não tem permissão para editar este post',
+      );
+    }
+
+    const updated = await this.prisma.post.update({
+      where: { id },
+      data: { ...dto, editedAt: new Date() },
+      select: postSelect(userId),
+    });
+
+    if (dto.content !== undefined) {
+      await this.notifications.notifyMentions(
+        dto.content,
+        userId,
+        id,
+        post.content,
+      );
+    }
+
+    return toPostDto(updated);
   }
 
   async remove(id: string, userId: string) {

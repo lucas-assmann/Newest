@@ -127,6 +127,7 @@ describe('Newest (e2e)', () => {
 
   describe('posts e paginação', () => {
     const postIds: string[] = [];
+    let commentId = '';
 
     it('cria 3 posts; corpo inválido → 400', async () => {
       for (const n of [1, 2, 3]) {
@@ -189,10 +190,11 @@ describe('Newest (e2e)', () => {
       });
 
       it('comentário com @menção vira duas notificações (COMMENT e MENTION)', async () => {
-        await as('bia')
+        const created = await as('bia')
           .post('/comment')
           .send({ postId: postIds[2], content: `Boa, @${ana.name}!` })
           .expect(201);
+        commentId = created.body.id;
 
         const comments = await as('ana')
           .get(`/comment/post/${postIds[2]}`)
@@ -240,6 +242,43 @@ describe('Newest (e2e)', () => {
           .get('/notification/unread-count')
           .expect(200);
         expect(Number(after.text)).toBe(0);
+      });
+    });
+
+    describe('editar', () => {
+      it('a ana edita o próprio post: muda o texto e fica marcado como editado', async () => {
+        const res = await as('ana')
+          .patch(`/posts/${postIds[2]}`)
+          .send({ title: 'Post 3 (editado)' })
+          .expect(200);
+        expect(res.body).toMatchObject({
+          title: 'Post 3 (editado)',
+          content: 'Conteúdo 3',
+        });
+        expect(res.body.editedAt).toEqual(expect.any(String));
+      });
+
+      it('a bia não pode editar o post da ana → 403', async () => {
+        await as('bia')
+          .patch(`/posts/${postIds[2]}`)
+          .send({ title: 'invasão' })
+          .expect(403);
+      });
+
+      it('a bia edita o próprio comentário', async () => {
+        const res = await as('bia')
+          .patch(`/comment/${commentId}`)
+          .send({ content: 'Comentário corrigido' })
+          .expect(200);
+        expect(res.body).toMatchObject({ content: 'Comentário corrigido' });
+        expect(res.body.editedAt).toEqual(expect.any(String));
+      });
+
+      it('a ana não pode editar o comentário da bia → 403', async () => {
+        await as('ana')
+          .patch(`/comment/${commentId}`)
+          .send({ content: 'invasão' })
+          .expect(403);
       });
     });
 

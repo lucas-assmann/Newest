@@ -122,6 +122,31 @@ describe('rotas da API', () => {
     });
   });
 
+  describe('edição', () => {
+    it.each([
+      ['/posts/p1', {}],
+      ['/posts/p1', { title: 'x'.repeat(101) }],
+      ['/comment/c1', { content: '' }],
+    ])('PATCH %s com corpo inválido → 400', async (url, body) => {
+      const token = await login();
+      await request(app.getHttpServer())
+        .patch(url)
+        .set('Authorization', `Bearer ${token}`)
+        .send(body)
+        .expect(400);
+    });
+
+    it.each(['/posts/p1', '/comment/c1'])(
+      'PATCH %s sem token → 401',
+      async (url) => {
+        await request(app.getHttpServer())
+          .patch(url)
+          .send({ content: 'x' })
+          .expect(401);
+      },
+    );
+  });
+
   describe('paginação por cursor', () => {
     const lists = [
       ['/posts', () => prisma.post.findMany],

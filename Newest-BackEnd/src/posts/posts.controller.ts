@@ -12,6 +12,7 @@ import type { AuthUser } from 'src/auth/current-user.decorator';
 import { CurrentUser } from 'src/auth/current-user.decorator';
 import { PaginationQueryDto } from 'src/common/pagination';
 import { CreatePostDto } from './dto/create-post.dto';
+import { UpdatePostDto } from './dto/update-post.dto';
 import { PostsService } from './posts.service';
 
 @Controller('posts')
@@ -53,6 +54,15 @@ export class PostsController {
   @Patch(':postId/like')
   toggleLike(@Param('postId') postId: string, @CurrentUser() user: AuthUser) {
     return this.postsService.toggleLike(postId, user.id);
+  }
+
+  @Patch(':id')
+  update(
+    @Param('id') id: string,
+    @Body() dto: UpdatePostDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.postsService.update(id, dto, user.id);
   }
 
   @Delete(':id')

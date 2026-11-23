@@ -18,6 +18,7 @@ describe('post.mapper', () => {
         images: ['img'],
         likesCount: 7,
         createdAt,
+        editedAt: null,
         author: { id: 'a', name: 'ana', avatar: null },
         likes: [{ id: 'l1' }],
         _count: { comments: 2 },
@@ -30,6 +31,7 @@ describe('post.mapper', () => {
       likes: 7,
       comments: 2,
       createdAt,
+      editedAt: null,
       author: { id: 'a', name: 'ana', avatar: null },
       isLiked: true,
     });
@@ -43,6 +45,7 @@ describe('post.mapper', () => {
       images: [],
       likesCount: 0,
       createdAt: new Date(),
+      editedAt: null,
       author: { id: 'a', name: 'ana', avatar: null },
       likes: [],
       _count: { comments: 0 },

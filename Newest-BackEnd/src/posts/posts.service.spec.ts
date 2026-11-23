@@ -218,3 +218,75 @@ describe('PostsService (cobertura)', () => {
     });
   });
 });
+
+describe('PostsService.update (editar post)', () => {
+  let prisma: PrismaMock;
+  let service: PostsService;
+
+  beforeEach(() => {
+    prisma = createPrismaMock();
+    const config = { get: () => undefined } as unknown as ConfigService;
+    service = new PostsService(prisma, config, new NotificationService(prisma));
+    prisma.post.update.mockResolvedValue({
+      id: 'p1',
+      likes: [],
+      _count: { comments: 0 },
+      author: { id: 'eu', name: 'eu', avatar: null },
+    } as any);
+  });
+
+  it('post inexistente → 404', async () => {
+    prisma.post.findUnique.mockResolvedValue(null);
+    await expect(
+      service.update('x', { title: 'novo' }, 'eu'),
+    ).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('post de outra pessoa → 403, sem gravar', async () => {
+    prisma.post.findUnique.mockResolvedValue({
+      authorId: 'outro',
+      content: 'c',
+    } as any);
+    await expect(
+      service.update('p1', { title: 'novo' }, 'eu'),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(prisma.post.update).not.toHaveBeenCalled();
+  });
+
+  it('o autor edita: grava o texto e marca editedAt', async () => {
+    prisma.post.findUnique.mockResolvedValue({
+      authorId: 'eu',
+      content: 'antigo',
+    } as any);
+
+    await service.update('p1', { title: 'novo' }, 'eu');
+
+    const { data } = prisma.post.update.mock.calls[0][0];
+    expect(data).toMatchObject({ title: 'novo' });
+    expect(data.editedAt).toBeInstanceOf(Date);
+    expect(data).not.toHaveProperty('images');
+  });
+
+  it('avisa só quem foi mencionado agora (não repete quem já estava)', async () => {
+    prisma.post.findUnique.mockResolvedValue({
+      authorId: 'eu',
+      content: 'oi @ana',
+    } as any);
+    prisma.user.findMany.mockResolvedValue([{ id: 'bia-id' }] as any);
+
+    await service.update('p1', { content: 'oi @ana e @bia' }, 'eu');
+
+    expect(prisma.user.findMany.mock.calls[0][0]!.where).toMatchObject({
+      name: { in: ['bia'] },
+    });
+  });
+
+  it('mudar só o título não gera notificação de menção', async () => {
+    prisma.post.findUnique.mockResolvedValue({
+      authorId: 'eu',
+      content: 'oi @ana',
+    } as any);
+    await service.update('p1', { title: 'novo' }, 'eu');
+    expect(prisma.user.findMany).not.toHaveBeenCalled();
+  });
+});

@@ -39,6 +39,10 @@ model Post {
   authorId      String
   createdAt     DateTime       @default(now())
   likesCount    Int            @default(0)
+  /**
+   * Quando o autor editou o post pela última vez (null = nunca editado).
+   */
+  editedAt      DateTime?
   comments      Comment[]
   author        User           @relation(fields: [authorId], references: [id], onDelete: Cascade)
   likes         Like[]
@@ -49,13 +53,17 @@ model Post {
 }
 
 model Comment {
-  id        String   @id @default(uuid())
+  id        String    @id @default(uuid())
   content   String
   postId    String
   authorId  String
-  createdAt DateTime @default(now())
-  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
-  author    User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  createdAt DateTime  @default(now())
+  /**
+   * Quando o autor editou o comentário pela última vez (null = nunca editado).
+   */
+  editedAt  DateTime?
+  post      Post      @relation(fields: [postId], references: [id], onDelete: Cascade)
+  author    User      @relation(fields: [authorId], references: [id], onDelete: Cascade)
 
   @@index([postId, createdAt]) // comentários de um post
 }

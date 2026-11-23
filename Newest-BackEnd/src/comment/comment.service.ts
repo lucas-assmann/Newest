@@ -13,6 +13,7 @@ import {
 import { NotificationService } from 'src/notification/notification.service';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateCommentDto } from './dto/create-comment.dto';
+import { UpdateCommentDto } from './dto/update-comment.dto';
 
 const authorSelect = {
   author: { select: { id: true, name: true, avatar: true } },
@@ -74,6 +75,37 @@ export class CommentService {
       throw new NotFoundException('Comentário não encontrado');
     }
     return comment;
+  }
+
+  /** Só o autor edita; marca editedAt e avisa só as menções novas. */
+  async update(id: string, { content }: UpdateCommentDto, userId: string) {
+    const comment = await this.prisma.comment.findUnique({
+      where: { id },
+      select: { authorId: true, content: true, postId: true },
+    });
+    if (!comment) {
+      throw new NotFoundException('Comentário não encontrado');
+    }
+    if (comment.authorId !== userId) {
+      throw new ForbiddenException(
+        'Você não tem permissão para editar este comentário',
+      );
+    }
+
+    const updated = await this.prisma.comment.update({
+      where: { id },
+      data: { content, editedAt: new Date() },
+      include: authorSelect,
+    });
+
+    await this.notifications.notifyMentions(
+      content,
+      userId,
+      comment.postId,
+      comment.content,
+    );
+
+    return updated;
   }
 
   async remove(id: string, userId: string) {

@@ -9,6 +9,7 @@ export function postSelect(currentUserId: string) {
     images: true,
     likesCount: true,
     createdAt: true,
+    editedAt: true,
     author: { select: { id: true, name: true, avatar: true } },
     // Só o like do usuário logado, para saber se ele já curtiu.
     likes: { where: { userId: currentUserId }, select: { id: true } },
@@ -29,6 +30,7 @@ export function toPostDto(post: PostRow) {
     likes: post.likesCount,
     comments: post._count.comments,
     createdAt: post.createdAt,
+    editedAt: post.editedAt,
     author: post.author,
     isLiked: post.likes.length > 0,
   };

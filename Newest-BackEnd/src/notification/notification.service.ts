@@ -18,9 +18,18 @@ export function extractMentions(content: string): string[] {
 export class NotificationService {
   constructor(private prisma: PrismaService) {}
 
-  /** Avisa quem foi mencionado num post ou comentário (antes duplicado nos dois). */
-  async notifyMentions(content: string, actorId: string, postId: string) {
-    const names = extractMentions(content);
+  /**
+   * Avisa quem foi mencionado num post ou comentário (antes duplicado nos dois).
+   * Na edição, passe o texto antigo: só quem foi mencionado agora é avisado.
+   */
+  async notifyMentions(
+    content: string,
+    actorId: string,
+    postId: string,
+    previousContent?: string,
+  ) {
+    const before = new Set(extractMentions(previousContent ?? ''));
+    const names = extractMentions(content).filter((name) => !before.has(name));
     if (names.length === 0) return;
 
     const mentioned = await this.prisma.user.findMany({

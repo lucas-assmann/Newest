@@ -122,3 +122,51 @@ describe('CommentService (cobertura)', () => {
     });
   });
 });
+
+describe('CommentService.update (editar comentário)', () => {
+  let prisma: PrismaMock;
+  let service: CommentService;
+
+  beforeEach(() => {
+    prisma = createPrismaMock();
+    service = new CommentService(prisma, new NotificationService(prisma));
+  });
+
+  it('comentário inexistente → 404', async () => {
+    prisma.comment.findUnique.mockResolvedValue(null);
+    await expect(
+      service.update('x', { content: 'novo' }, 'eu'),
+    ).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('comentário de outra pessoa → 403, sem gravar', async () => {
+    prisma.comment.findUnique.mockResolvedValue({
+      authorId: 'outro',
+      content: 'c',
+      postId: 'p1',
+    } as any);
+    await expect(
+      service.update('c1', { content: 'novo' }, 'eu'),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(prisma.comment.update).not.toHaveBeenCalled();
+  });
+
+  it('o autor edita: grava, marca editedAt e avisa só menções novas', async () => {
+    prisma.comment.findUnique.mockResolvedValue({
+      authorId: 'eu',
+      content: 'oi @ana',
+      postId: 'p1',
+    } as any);
+    prisma.comment.update.mockResolvedValue({ id: 'c1' } as any);
+    prisma.user.findMany.mockResolvedValue([]);
+
+    await service.update('c1', { content: 'oi @ana @bia' }, 'eu');
+
+    const { data } = prisma.comment.update.mock.calls[0][0];
+    expect(data.content).toBe('oi @ana @bia');
+    expect(data.editedAt).toBeInstanceOf(Date);
+    expect(prisma.user.findMany.mock.calls[0][0]!.where).toMatchObject({
+      name: { in: ['bia'] },
+    });
+  });
+});
