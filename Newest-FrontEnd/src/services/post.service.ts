@@ -37,6 +37,14 @@ export const getUserPosts = async (userId: string, cursor?: string): Promise<Pag
   return data;
 };
 
+export const updatePost = async (
+  postId: string,
+  changes: { title?: string; content?: string },
+): Promise<PostDTO> => {
+  const { data } = await api.patch<PostDTO>(`/posts/${postId}`, changes);
+  return data;
+};
+
 export const deletePost = async (postId: string) => {
   const { data } = await api.delete(`/posts/${postId}`);
   return data;

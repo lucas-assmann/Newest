@@ -1,7 +1,7 @@
 'use client';
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { AlertTriangle, MoreVertical, Trash2 } from 'lucide-react';
+import { AlertTriangle, MoreVertical, Pencil, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import {
   DropdownMenu,
@@ -16,13 +16,15 @@ import { queryKeys } from '@/lib/query-keys';
 import { renderContentWithMentions } from "@/lib/render-mentions";
 import { deleteComment } from '@/services/comment.service';
 import { CommentDTO } from '@/types/Comment.types';
+import { CommentEditor } from "../comment-editor";
 import { DialogNoCloseButton } from "../dialog";
 
 export default function Comment({ comment }: { comment: CommentDTO }) {
   const { data: currentUser } = useCurrentUser();
   const queryClient = useQueryClient();
   const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const { id, content, author, createdAt, postId } = comment;
+  const [editing, setEditing] = useState(false);
+  const { id, content, author, createdAt, postId, editedAt } = comment;
 
   const isOwner = currentUser?.id === author.id;
 
@@ -60,10 +62,13 @@ export default function Comment({ comment }: { comment: CommentDTO }) {
           <div className="flex items-start justify-between gap-2">
             <div>
               <p className="font-semibold text-sm">{author.name}</p>
-              <p className="text-xs text-muted-foreground">{formatDate(createdAt)}</p>
+              <p className="text-xs text-muted-foreground">
+                {formatDate(createdAt)}
+                {editedAt && " · editado"}
+              </p>
             </div>
 
-            {isOwner && (
+            {isOwner && !editing && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <button
@@ -74,6 +79,10 @@ export default function Comment({ comment }: { comment: CommentDTO }) {
                   </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={() => setEditing(true)} className="cursor-pointer">
+                    <Pencil className="h-4 w-4 mr-2" />
+                    Editar comentário
+                  </DropdownMenuItem>
                   <DropdownMenuItem
                     onClick={() => setShowDeleteModal(true)}
                     className="text-destructive focus:text-destructive cursor-pointer"
@@ -86,7 +95,11 @@ export default function Comment({ comment }: { comment: CommentDTO }) {
             )}
           </div>
 
-          <p className="text-sm mt-2 wrap-break-words">{renderContentWithMentions(content)}</p>
+          {editing ? (
+            <CommentEditor comment={comment} onDone={() => setEditing(false)} />
+          ) : (
+            <p className="text-sm mt-2 wrap-break-words">{renderContentWithMentions(content)}</p>
+          )}
         </div>
       </div>
     </>

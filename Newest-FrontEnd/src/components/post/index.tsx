@@ -1,10 +1,11 @@
 'use client';
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { AlertTriangle, ChevronLeft, ChevronRight, Clock, Heart, MessageCircle, MoreVertical, Trash2 } from "lucide-react";
+import { AlertTriangle, ChevronLeft, ChevronRight, Clock, Heart, MessageCircle, MoreVertical, Pencil, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from 'react';
 import { DialogNoCloseButton } from "@/components/dialog";
+import { EditPostDialog } from "@/components/edit-post-dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -37,6 +38,7 @@ export default function Post({ post, clickable = true, fullDate = false }: PostP
   const { data: currentUser } = useCurrentUser();
   const like = useLikePost(post.id);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
 
   const { id, author, title, content, images = [], likes, isLiked, comments } = post;
@@ -71,6 +73,10 @@ export default function Post({ post, clickable = true, fullDate = false }: PostP
         disabled={deleteMutation.isPending}
       />
 
+      {isOwner && (
+        <EditPostDialog post={post} open={showEditModal} onClose={() => setShowEditModal(false)} />
+      )}
+
       <article
         className={cn(
           "group w-full bg-card border border-border rounded-2xl p-6",
@@ -95,6 +101,7 @@ export default function Post({ post, clickable = true, fullDate = false }: PostP
                 <span className="text-xs">
                   {fullDate ? new Date(post.createdAt).toLocaleDateString("pt-BR") : formatDate(post.createdAt)}
                 </span>
+                {post.editedAt && <span className="text-xs">· editado</span>}
               </div>
             </div>
           </div>
@@ -117,6 +124,13 @@ export default function Post({ post, clickable = true, fullDate = false }: PostP
                   </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
+                  <DropdownMenuItem
+                    onClick={stop(() => setShowEditModal(true))}
+                    className="cursor-pointer"
+                  >
+                    <Pencil className="h-4 w-4 mr-2" />
+                    Editar post
+                  </DropdownMenuItem>
                   <DropdownMenuItem
                     onClick={stop(() => setShowDeleteModal(true))}
                     className="text-destructive focus:text-destructive cursor-pointer"

@@ -19,6 +19,11 @@ export const createComment = async (commentData: {
   return data;
 };
 
+export const updateComment = async (commentId: string, content: string): Promise<CommentDTO> => {
+  const { data } = await api.patch<CommentDTO>(`/comment/${commentId}`, { content });
+  return data;
+};
+
 export const deleteComment = async (commentId: string) => {
   const { data } = await api.delete(`/comment/${commentId}`);
   return data;
