@@ -9,7 +9,7 @@ import { PrismaService } from '../src/prisma/prisma.service';
 
 /**
  * Testes e2e: o app inteiro contra um banco de verdade (o de dev).
- * Só criam e apagam usuários com email @e2e.test — o resto do banco não é tocado.
+ * Só criam e apagam usuários com email @e2e.test (cada rodada apaga os seus) — o resto do banco não é tocado.
  * Apagar o usuário leva junto (cascade) os posts, comentários, likes e notificações dele.
  */
 const DOMAIN = '@e2e.test';
@@ -30,8 +30,20 @@ describe('Newest (e2e)', () => {
   let prisma: PrismaService;
   const tokens: Record<string, string> = {};
 
+  // Apaga só os usuários desta rodada: o GitHub Actions e o PC podem rodar
+  // ao mesmo tempo no mesmo banco.
   const cleanup = () =>
-    prisma.user.deleteMany({ where: { email: { endsWith: DOMAIN } } });
+    prisma.user.deleteMany({
+      where: { email: { in: [ana.email, bia.email] } },
+    });
+  // Sobras de rodadas que caíram no meio (mais de 1 hora atrás).
+  const cleanupLeftovers = () =>
+    prisma.user.deleteMany({
+      where: {
+        email: { endsWith: DOMAIN },
+        createdAt: { lt: new Date(Date.now() - 60 * 60 * 1000) },
+      },
+    });
 
   const api = () => request(app.getHttpServer());
   const as = (who: 'ana' | 'bia') => ({
@@ -53,7 +65,7 @@ describe('Newest (e2e)', () => {
     configureApp(app);
     await app.init();
     prisma = app.get(PrismaService);
-    await cleanup(); // sobras de uma rodada que caiu no meio
+    await cleanupLeftovers();
   });
 
   afterAll(async () => {

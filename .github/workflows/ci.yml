@@ -1,0 +1,98 @@
+# Robô de testes: roda a cada push e a cada pull request.
+# Resultado na aba "Actions" do repositório (✅ passou / ❌ quebrou).
+name: CI
+
+on:
+  push:
+  pull_request:
+
+# Um push novo na mesma branch cancela a rodada antiga, que ficou desatualizada.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Back-end (lint, testes, build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: Newest-BackEnd
+    env:
+      # Falsa: só para o Prisma gerar o client. Os testes unitários não usam banco.
+      DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: Newest-BackEnd/package-lock.json
+      - run: npm ci
+      - run: npx prisma generate
+      - name: Lint (sem --fix)
+        run: npx eslint "{src,test}/**/*.ts"
+      - run: npx jest
+      - run: npm run build
+
+  backend-e2e:
+    name: Back-end (e2e no banco de dev)
+    needs: backend
+    runs-on: ubuntu-latest
+    # Um e2e por vez no banco de dev.
+    concurrency:
+      group: e2e-banco-de-dev
+      cancel-in-progress: false
+    defaults:
+      run:
+        working-directory: Newest-BackEnd
+    env:
+      # Cadastrado pelo usuário em Settings → Secrets and variables → Actions.
+      # Sem ele (ex.: pull request de fork), o e2e é pulado em vez de falhar.
+      E2E_DATABASE_URL: ${{ secrets.E2E_DATABASE_URL }}
+      DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
+    steps:
+      - name: Sem o secret E2E_DATABASE_URL, pula o e2e
+        if: env.E2E_DATABASE_URL == ''
+        working-directory: .
+        run: echo "::notice::E2E_DATABASE_URL não cadastrado; testes e2e pulados."
+      - uses: actions/checkout@v4
+        if: env.E2E_DATABASE_URL != ''
+      - uses: actions/setup-node@v4
+        if: env.E2E_DATABASE_URL != ''
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: Newest-BackEnd/package-lock.json
+      - if: env.E2E_DATABASE_URL != ''
+        run: npm ci
+      - if: env.E2E_DATABASE_URL != ''
+        run: npx prisma generate
+      # As migrations NÃO rodam aqui: o banco de dev é atualizado à mão
+      # (DATABASE_URL=<dev> npx prisma migrate deploy), nunca pelo robô.
+      - if: env.E2E_DATABASE_URL != ''
+        run: npm run test:e2e
+
+  frontend:
+    name: Front-end (lint, testes, build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: Newest-FrontEnd
+    env:
+      # Valores de exemplo: o build só precisa que existam.
+      NEXT_PUBLIC_API_URL: http://localhost:3000
+      NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME: ci
+      NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET: ci
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: Newest-FrontEnd/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npx tsc --noEmit
+      - run: npm test
+      - run: npm run build
